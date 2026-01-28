@@ -1,8 +1,10 @@
+import { AuthConfig } from "convex/server";
+
 export default {
   providers: [
     {
-      domain: "https://your-auth0-domain.auth0.com/",
-      applicationID: "your-auth0-client-id",
+      domain: process.env.CLERK_JWT_ISSUER_DOMAIN!,
+      applicationID: "convex",
     },
   ],
-};
+} satisfies AuthConfig;
