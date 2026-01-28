@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { getSession } from '@auth0/nextjs-auth0';
 import {
   adjectives,
   animals,
@@ -8,10 +8,9 @@ import {
   uniqueNamesGenerator,
 } from "unique-names-generator";
 
-import { DEFAULT_CONVERSATION_TITLE } from "@/features/conversations/constants";
-
 import { inngest } from "@/inngest/client";
 import { convex } from "@/lib/convex-client";
+import { getUserId } from "@/lib/auth-helpers";
 
 import { api } from "../../../../../convex/_generated/api";
 
@@ -20,11 +19,13 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
-
-  if (!userId) {
+  const session = await getSession();
+  
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const userId = getUserId(session.user);
 
   const internalKey = process.env.POLARIS_CONVEX_INTERNAL_KEY;
 
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     {
       internalKey,
       projectName,
-      conversationTitle: DEFAULT_CONVERSATION_TITLE,
+      conversationTitle: "New Conversation",
       ownerId: userId,
     },
   );

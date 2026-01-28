@@ -1,9 +1,10 @@
 import { generateText, Output } from "ai";
-import { auth } from "@clerk/nextjs/server";
+import { getSession } from '@auth0/nextjs-auth0';
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { anthropic } from "@ai-sdk/anthropic";
-// import { google } from "@ai-sdk/google";
+
+import { getUserId } from "@/lib/auth-helpers";
 
 const suggestionSchema = z.object({
   suggestion: z
@@ -45,14 +46,16 @@ Your suggestion is inserted immediately after the cursor, so never suggest code 
 
 export async function POST(request: Request) {
   try {
-    const { userId } = await auth();
+    const session = await getSession();
 
-    if (!userId) {
+    if (!session?.user) {
       return NextResponse.json(
         { error: "Unauthorized" },
-        { status: 403 },
+        { status: 401 },
       );
     }
+
+    const userId = getUserId(session.user);
 
     const {
       fileName,

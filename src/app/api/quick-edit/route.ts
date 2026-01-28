@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { generateText, Output } from "ai";
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { getSession } from '@auth0/nextjs-auth0';
 import { anthropic } from "@ai-sdk/anthropic";
 
-import { firecrawl } from "@/lib/firecrawl";
+import { getUserId } from "@/lib/auth-helpers";
 
 const quickEditSchema = z.object({
   editedCode: z
@@ -42,15 +42,17 @@ If the instruction is unclear or cannot be applied, return the original code unc
 
 export async function POST(request: Request) {
   try {
-    const { userId } = await auth();
+    const session = await getSession();
     const { selectedCode, fullCode, instruction } = await request.json();
 
-    if (!userId) {
+    if (!session?.user) {
       return NextResponse.json(
         { error: "Unauthorized" },
-        { status: 400 }
+        { status: 401 }
       );
     }
+
+    const userId = getUserId(session.user);
 
     if (!selectedCode) {
       return NextResponse.json(

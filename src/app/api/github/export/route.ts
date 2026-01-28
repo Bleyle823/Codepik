@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { getSession } from '@auth0/nextjs-auth0';
 
 import { inngest } from "@/inngest/client";
+import { getUserId } from "@/lib/auth-helpers";
 
 import { Id } from "../../../../../convex/_generated/dataModel";
 
@@ -14,28 +15,23 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const { userId, has } = await auth();
-
-  if (!userId) {
+  const session = await getSession();
+  
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const hasPro = has({ plan: "pro" });
-
-  if (!hasPro) {
-    return NextResponse.json({ error: "Pro plan required" }, { status: 403 });
-  }
-
+  const userId = getUserId(session.user);
   const body = await request.json();
   const { projectId, repoName, visibility, description } = requestSchema.parse(body);
 
-  const client = await clerkClient();
-  const tokens = await client.users.getUserOauthAccessToken(userId, "github");
-  const githubToken = tokens.data[0]?.token;
+  // For Auth0, we'll need to implement GitHub OAuth separately
+  // For now, we'll require a GitHub token to be provided or stored in user metadata
+  const githubToken = session.user['https://github.com/access_token'] || process.env.GITHUB_TOKEN;
 
   if (!githubToken) {
     return NextResponse.json(
-      { error: "GitHub not connected. Please reconnect your GitHub account." },
+      { error: "GitHub not connected. Please connect your GitHub account." },
       { status: 400 }
     );
   }

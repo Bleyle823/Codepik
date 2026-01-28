@@ -1,6 +1,24 @@
-import { clerkMiddleware } from '@clerk/nextjs/server';
+import { withMiddlewareAuthRequired } from '@auth0/nextjs-auth0/edge';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-export default clerkMiddleware();
+export default withMiddlewareAuthRequired(
+  async function middleware(request: NextRequest) {
+    // Add any custom middleware logic here
+    return NextResponse.next();
+  },
+  {
+    // Only protect specific routes, not all routes
+    matcher: [
+      '/projects/:path*',
+      '/api/messages/:path*',
+      '/api/projects/:path*',
+      '/api/github/:path*',
+      '/api/quick-edit',
+      '/api/suggestion'
+    ]
+  }
+);
 
 export const config = {
   matcher: [
