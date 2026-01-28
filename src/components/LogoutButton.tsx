@@ -1,12 +1,13 @@
 "use client";
 
+import { SignOutButton } from "@clerk/nextjs";
+
 export default function LogoutButton() {
   return (
-    <a
-      href="/auth/logout"
-      className="button logout"
-    >
-      Log Out
-    </a>
+    <SignOutButton>
+      <button className="button logout">
+        Log Out
+      </button>
+    </SignOutButton>
   );
 }

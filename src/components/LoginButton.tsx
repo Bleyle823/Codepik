@@ -1,12 +1,13 @@
 "use client";
 
+import { SignInButton } from "@clerk/nextjs";
+
 export default function LoginButton() {
   return (
-    <a
-      href="/auth/login"
-      className="button login"
-    >
-      Log In
-    </a>
+    <SignInButton>
+      <button className="button login">
+        Log In
+      </button>
+    </SignInButton>
   );
 }
