@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Inter } from "next/font/google";
-import { Auth0Provider } from "@auth0/nextjs-auth0/client";
+import {
+  ClerkProvider,
+  SignInButton,
+  SignUpButton,
+  SignedIn,
+  SignedOut,
+  UserButton,
+} from "@clerk/nextjs";
 
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/providers";
@@ -30,17 +37,37 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
         <body
           className={`${inter.variable} ${plexMono.variable} antialiased`}
         >
-          <Auth0Provider>
-            <Providers>
-              {children}
-              <Toaster />
-            </Providers>
-          </Auth0Provider>
+          <header className="flex justify-between items-center p-4 border-b">
+            <div className="text-xl font-semibold">Codepik</div>
+            <div className="flex items-center gap-4">
+              <SignedOut>
+                <SignInButton>
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    Sign In
+                  </button>
+                </SignInButton>
+                <SignUpButton>
+                  <button className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50">
+                    Sign Up
+                  </button>
+                </SignUpButton>
+              </SignedOut>
+              <SignedIn>
+                <UserButton />
+              </SignedIn>
+            </div>
+          </header>
+          <Providers>
+            {children}
+            <Toaster />
+          </Providers>
         </body>
       </html>
+    </ClerkProvider>
   );
 }
