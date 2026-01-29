@@ -1,14 +1,15 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { nanoid } from "nanoid";
 
 import { convex } from "@/lib/convex-client";
 import { api } from "../../../../../convex/_generated/api";
+import { inngest } from "@/inngest/client";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const MAX_FILES = 1000; // Maximum number of files
-const CHUNK_SIZE = 100; // Process files in chunks of 100
-const BINARY_THRESHOLD = 1024 * 1024; // 1MB threshold for binary files
+const UPLOAD_TIMEOUT = 30000; // 30 second timeout for initial upload
 
 export async function POST(request: Request) {
   const { userId } = await auth();
@@ -68,17 +69,27 @@ export async function POST(request: Request) {
       ownerId: userId,
     });
 
-    // Process files
-    const folderMap = new Map<string, string>();
-    const processedFiles: Array<{
+    // Generate unique upload ID for tracking
+    const uploadId = nanoid();
+
+    // Prepare file data for Inngest processing
+    const fileData: Array<{
       name: string;
       path: string;
-      content?: string;
+      size: number;
+      type: string;
+      content: string; // Base64 encoded
       isDirectory: boolean;
       parentPath?: string;
     }> = [];
 
-    // First, collect all unique folder paths
+    const folderStructure: Array<{
+      path: string;
+      name: string;
+      parentPath?: string;
+    }> = [];
+
+    // Collect folder structure
     const folderPaths = new Set<string>();
     
     for (const file of files) {
@@ -92,144 +103,77 @@ export async function POST(request: Request) {
       }
     }
 
-    // Sort folders by depth (parents first)
-    const sortedFolders = Array.from(folderPaths).sort((a, b) => {
-      return a.split('/').length - b.split('/').length;
-    });
-
-    // Create folders
-    for (const folderPath of sortedFolders) {
+    // Build folder structure array
+    for (const folderPath of folderPaths) {
       const pathParts = folderPath.split('/');
       const folderName = pathParts[pathParts.length - 1];
       const parentPath = pathParts.slice(0, -1).join('/');
-      const parentId = parentPath ? folderMap.get(parentPath) : undefined;
-
-      const folderId = await convex.mutation(api.system.createFolder, {
-        internalKey,
-        projectId,
+      
+      folderStructure.push({
+        path: folderPath,
         name: folderName,
-        parentId,
+        parentPath: parentPath || undefined,
       });
-
-      folderMap.set(folderPath, folderId);
     }
 
-    // Process files in parallel chunks for better performance
-    const processFileChunk = async (fileChunk: File[]) => {
-      const promises = fileChunk.map(async (file) => {
-        const relativePath = file.webkitRelativePath || file.name;
-        const pathParts = relativePath.split('/');
-        const fileName = pathParts[pathParts.length - 1];
-        const parentPath = pathParts.slice(0, -1).join('/');
-        const parentId = parentPath ? folderMap.get(parentPath) : undefined;
+    // Process files and convert to base64 (for small files only initially)
+    for (const file of files) {
+      const relativePath = file.webkitRelativePath || file.name;
+      const pathParts = relativePath.split('/');
+      const fileName = pathParts[pathParts.length - 1];
+      const parentPath = pathParts.slice(0, -1).join('/');
 
-        // Skip empty files and certain file types
-        if (file.size === 0 || fileName.startsWith('.DS_Store')) {
-          return null;
-        }
+      // Skip empty files and certain file types
+      if (file.size === 0 || fileName.startsWith('.DS_Store')) {
+        continue;
+      }
 
-        try {
-          // Fast binary detection based on file extension and size
-          const isBinaryByExtension = /\.(jpg|jpeg|png|gif|bmp|ico|pdf|zip|tar|gz|exe|dll|so|dylib|bin|dat)$/i.test(fileName);
-          const isBinaryBySize = file.size > BINARY_THRESHOLD;
-          
-          if (isBinaryByExtension || isBinaryBySize) {
-            // Handle binary files
-            const arrayBuffer = await file.arrayBuffer();
-            
-            // Generate upload URL only when needed
-            const uploadUrl = await convex.mutation(
-              api.system.generateUploadUrl,
-              { internalKey }
-            );
+      try {
+        // Convert file to base64 for Inngest processing
+        const arrayBuffer = await file.arrayBuffer();
+        const base64Content = Buffer.from(arrayBuffer).toString('base64');
 
-            const uploadResponse = await fetch(uploadUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/octet-stream" },
-              body: arrayBuffer,
-            });
-
-            const { storageId } = await uploadResponse.json();
-
-            await convex.mutation(api.system.createBinaryFile, {
-              internalKey,
-              projectId,
-              name: fileName,
-              storageId,
-              parentId,
-            });
-          } else {
-            // Handle text files with optimized binary detection
-            const arrayBuffer = await file.arrayBuffer();
-            const uint8Array = new Uint8Array(arrayBuffer);
-            
-            // Quick binary check on first 512 bytes
-            let isBinary = false;
-            const checkLength = Math.min(512, uint8Array.length);
-            for (let i = 0; i < checkLength; i++) {
-              if (uint8Array[i] === 0) {
-                isBinary = true;
-                break;
-              }
-            }
-
-            if (isBinary) {
-              // Treat as binary file
-              const uploadUrl = await convex.mutation(
-                api.system.generateUploadUrl,
-                { internalKey }
-              );
-
-              const uploadResponse = await fetch(uploadUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/octet-stream" },
-                body: arrayBuffer,
-              });
-
-              const { storageId } = await uploadResponse.json();
-
-              await convex.mutation(api.system.createBinaryFile, {
-                internalKey,
-                projectId,
-                name: fileName,
-                storageId,
-                parentId,
-              });
-            } else {
-              // Create text file
-              const content = new TextDecoder().decode(uint8Array);
-              
-              await convex.mutation(api.system.createFile, {
-                internalKey,
-                projectId,
-                name: fileName,
-                content,
-                parentId,
-              });
-            }
-          }
-          return fileName;
-        } catch (error) {
-          console.error(`Failed to process file ${fileName}:`, error);
-          return null;
-        }
-      });
-
-      return Promise.allSettled(promises);
-    };
-
-    // Process files in chunks to avoid overwhelming the server
-    let processedCount = 0;
-    for (let i = 0; i < files.length; i += CHUNK_SIZE) {
-      const chunk = files.slice(i, i + CHUNK_SIZE);
-      await processFileChunk(chunk);
-      processedCount += chunk.length;
+        fileData.push({
+          name: fileName,
+          path: relativePath,
+          size: file.size,
+          type: file.type,
+          content: base64Content,
+          isDirectory: false,
+          parentPath: parentPath || undefined,
+        });
+      } catch (error) {
+        console.error(`Failed to process file ${fileName}:`, error);
+      }
     }
+
+    // Initialize upload status
+    await convex.mutation(api.system.updateUploadStatus, {
+      internalKey,
+      projectId,
+      uploadId,
+      status: "queued",
+      progress: 0,
+      message: "Upload queued for processing...",
+    });
+
+    // Trigger Inngest background processing
+    const event = await inngest.send({
+      name: "upload/process",
+      data: {
+        projectId,
+        uploadId,
+        files: fileData,
+        folderStructure,
+      },
+    });
 
     return NextResponse.json({ 
       success: true, 
       projectId,
-      filesProcessed: processedCount
+      uploadId,
+      filesQueued: fileData.length,
+      message: "Upload queued for background processing"
     });
 
   } catch (error) {

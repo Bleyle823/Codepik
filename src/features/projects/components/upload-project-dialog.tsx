@@ -6,6 +6,8 @@ import { useForm } from "@tanstack/react-form";
 import { useState, useRef } from "react";
 import { UploadIcon, FolderIcon, FileIcon } from "lucide-react";
 
+const UPLOAD_TIMEOUT = 30000; // 30 second timeout for initial upload
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -41,6 +43,10 @@ export const UploadProjectDialog = ({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<string>("");
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [currentUpload, setCurrentUpload] = useState<{
+    projectId: string;
+    uploadId: string;
+  } | null>(null);
 
   const form = useForm({
     defaultValues: {
@@ -86,34 +92,84 @@ export const UploadProjectDialog = ({
           });
         }, 200);
 
-        const { projectId, filesProcessed } = await ky
+        const { projectId, uploadId, filesQueued } = await ky
           .post("/api/projects/upload", {
             body: formData,
-            timeout: 300000, // 5 minute timeout for large uploads
+            timeout: UPLOAD_TIMEOUT, // 30 second timeout for initial upload
             signal: controller.signal, // Add abort signal
           })
           .json<{ 
             success: boolean; 
             projectId: Id<"projects">;
-            filesProcessed: number;
+            uploadId: string;
+            filesQueued: number;
           }>();
 
         clearInterval(progressInterval);
-        setUploadProgress(100);
-        setUploadStatus("Upload complete!");
-        setAbortController(null);
+        setUploadProgress(30);
+        setUploadStatus("Files queued for processing...");
+        setCurrentUpload({ projectId, uploadId });
         
-        toast.success(`Project uploaded successfully! ${filesProcessed} files processed.`);
-        
-        // Small delay to show completion
-        setTimeout(() => {
-          onOpenChange(false);
-          form.reset();
-          setSelectedFiles([]);
-          setUploadProgress(0);
-          setUploadStatus("");
-          router.push(`/projects/${projectId}`);
-        }, 500);
+        // Start polling for upload progress
+        const pollProgress = async () => {
+          try {
+            const response = await ky
+              .get(`/api/projects/upload/status?projectId=${projectId}&uploadId=${uploadId}`)
+              .json<{
+                success: boolean;
+                status: string;
+                progress: number;
+                message: string;
+                error?: string;
+              }>();
+
+            if (response.success) {
+              setUploadProgress(response.progress);
+              setUploadStatus(response.message);
+
+              if (response.status === "completed") {
+                setAbortController(null);
+                toast.success("Project uploaded successfully!");
+                
+                // Small delay to show completion
+                setTimeout(() => {
+                  onOpenChange(false);
+                  form.reset();
+                  setSelectedFiles([]);
+                  setUploadProgress(0);
+                  setUploadStatus("");
+                  router.push(`/projects/${projectId}`);
+                }, 1000);
+                
+                return true; // Stop polling
+              } else if (response.status === "failed") {
+                throw new Error(response.error || "Upload failed");
+              } else if (response.status === "cancelled") {
+                toast.info("Upload was cancelled");
+                setUploadProgress(0);
+                setUploadStatus("");
+                setAbortController(null);
+                return true; // Stop polling
+              }
+            }
+            
+            return false; // Continue polling
+          } catch (error) {
+            console.error("Progress polling error:", error);
+            return false; // Continue polling (might be temporary network issue)
+          }
+        };
+
+        // Poll every 2 seconds
+        const pollInterval = setInterval(async () => {
+          const shouldStop = await pollProgress();
+          if (shouldStop) {
+            clearInterval(pollInterval);
+          }
+        }, 2000);
+
+        // Initial progress check
+        setTimeout(() => pollProgress(), 1000);
 
       } catch (error) {
         setUploadProgress(0);
@@ -173,14 +229,31 @@ export const UploadProjectDialog = ({
 
   const totalSize = selectedFiles.reduce((sum, file) => sum + file.size, 0);
 
-  const cancelUpload = () => {
+  const cancelUpload = async () => {
     if (abortController) {
       abortController.abort();
-      setAbortController(null);
-      setUploadProgress(0);
-      setUploadStatus("");
-      toast.info("Upload cancelled");
     }
+
+    if (currentUpload) {
+      try {
+        // Cancel the background processing
+        await ky.post("/api/projects/upload/status", {
+          json: {
+            projectId: currentUpload.projectId,
+            uploadId: currentUpload.uploadId,
+            action: "cancel",
+          },
+        });
+      } catch (error) {
+        console.error("Failed to cancel upload:", error);
+      }
+    }
+
+    setAbortController(null);
+    setCurrentUpload(null);
+    setUploadProgress(0);
+    setUploadStatus("");
+    toast.info("Upload cancelled");
   };
 
   return (
