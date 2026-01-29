@@ -1,7 +1,6 @@
 "use client";
 
-import { Poppins } from "next/font/google";
-import { SparkleIcon } from "lucide-react";
+import { SparkleIcon, UploadIcon } from "lucide-react";
 import { FaGithub } from "react-icons/fa";
 import { useEffect, useState } from "react";
 
@@ -12,16 +11,13 @@ import { Kbd } from "@/components/ui/kbd";
 import { ProjectsList } from "./projects-list";
 import { ProjectsCommandDialog } from "./projects-command-dialog";
 import { ImportGithubDialog } from "./import-github-dialog";
+import { UploadProjectDialog } from "./upload-project-dialog";
 import { NewProjectDialog } from "./new-project-dialog";
-
-const font = Poppins({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-})
 
 export const ProjectsView = () => {
   const [commandDialogOpen, setCommandDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -34,6 +30,10 @@ export const ProjectsView = () => {
         if (e.key === "i") {
           e.preventDefault();
           setImportDialogOpen(true);
+        }
+        if (e.key === "u") {
+          e.preventDefault();
+          setUploadDialogOpen(true);
         }
         if (e.key === "j") {
           e.preventDefault();
@@ -57,6 +57,10 @@ export const ProjectsView = () => {
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
       />
+      <UploadProjectDialog
+        open={uploadDialogOpen}
+        onOpenChange={setUploadDialogOpen}
+      />
       <NewProjectDialog
         open={newProjectDialogOpen}
         onOpenChange={setNewProjectDialogOpen}
@@ -69,8 +73,7 @@ export const ProjectsView = () => {
             <div className="flex items-center gap-2 w-full group/logo">
               <img src="/logo.svg" alt="Polaris" className="size-[32px] md:size-[46px]" />
               <h1 className={cn(
-                "text-4xl md:text-5xl font-semibold",
-                font.className,
+                "text-4xl md:text-5xl font-semibold font-sans",
               )}>
                 Polaris
               </h1>
@@ -79,20 +82,20 @@ export const ProjectsView = () => {
           </div>
 
           <div className="flex flex-col gap-4 w-full">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button
                 variant="outline"
                 onClick={() => setNewProjectDialogOpen(true)}
-                className="h-full items-start justify-start p-4 bg-background border flex flex-col gap-6 rounded-none"
+                className="h-full items-start justify-start p-3 bg-background border flex flex-col gap-4 rounded-none"
               >
                 <div className="flex items-center justify-between w-full">
                   <SparkleIcon className="size-4" />
-                  <Kbd className="bg-accent border">
+                  <Kbd className="bg-accent border text-xs">
                     ⌘J
                   </Kbd>
                 </div>
                 <div>
-                  <span className="text-sm">
+                  <span className="text-xs">
                     New
                   </span>
                 </div>
@@ -100,17 +103,34 @@ export const ProjectsView = () => {
               <Button
                 variant="outline"
                 onClick={() => setImportDialogOpen(true)}
-                className="h-full items-start justify-start p-4 bg-background border flex flex-col gap-6 rounded-none"
+                className="h-full items-start justify-start p-3 bg-background border flex flex-col gap-4 rounded-none"
               >
                 <div className="flex items-center justify-between w-full">
                   <FaGithub className="size-4" />
-                  <Kbd className="bg-accent border">
+                  <Kbd className="bg-accent border text-xs">
                     ⌘I
                   </Kbd>
                 </div>
                 <div>
-                  <span className="text-sm">
+                  <span className="text-xs">
                     Import
+                  </span>
+                </div>
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setUploadDialogOpen(true)}
+                className="h-full items-start justify-start p-3 bg-background border flex flex-col gap-4 rounded-none"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <UploadIcon className="size-4" />
+                  <Kbd className="bg-accent border text-xs">
+                    ⌘U
+                  </Kbd>
+                </div>
+                <div>
+                  <span className="text-xs">
+                    Upload
                   </span>
                 </div>
               </Button>

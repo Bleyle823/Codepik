@@ -4,7 +4,7 @@ export const verifyAuth = async (ctx: QueryCtx | MutationCtx) => {
   const identity = await ctx.auth.getUserIdentity();
 
   if (!identity) {
-    throw new Error("Unauthorized");
+    throw new Error("Unauthenticated call");
   }
 
   return identity;

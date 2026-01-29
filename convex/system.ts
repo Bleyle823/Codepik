@@ -221,6 +221,15 @@ export const createFile = mutation({
   handler: async (ctx, args) => {
     validateInternalKey(args.internalKey);
 
+    // Calculate the path for this file
+    let path = args.name;
+    if (args.parentId) {
+      const parent = await ctx.db.get(args.parentId);
+      if (parent) {
+        path = `${parent.path}/${args.name}`;
+      }
+    }
+
     const files = await ctx.db
       .query("files")
       .withIndex("by_project_parent", (q) =>
@@ -241,8 +250,8 @@ export const createFile = mutation({
       name: args.name,
       content: args.content,
       type: "file",
+      path: path,
       parentId: args.parentId,
-      updatedAt: Date.now(),
     });
 
     return fileId;
@@ -315,6 +324,15 @@ export const createFolder = mutation({
   handler: async (ctx, args) => {
     validateInternalKey(args.internalKey);
 
+    // Calculate the path for this folder
+    let path = args.name;
+    if (args.parentId) {
+      const parent = await ctx.db.get(args.parentId);
+      if (parent) {
+        path = `${parent.path}/${args.name}`;
+      }
+    }
+
     const files = await ctx.db
       .query("files")
       .withIndex("by_project_parent", (q) =>
@@ -323,7 +341,7 @@ export const createFolder = mutation({
       .collect();
 
     const existing = files.find(
-      (file) => file.name === args.name && file.type === "folder"
+      (file) => file.name === args.name && file.type === "directory"
     );
 
     if (existing) {
@@ -333,9 +351,9 @@ export const createFolder = mutation({
     const fileId = await ctx.db.insert("files", {
       projectId: args.projectId,
       name: args.name,
-      type: "folder",
+      type: "directory", // Use "directory" to match schema
+      path: path,
       parentId: args.parentId,
-      updatedAt: Date.now(),
     });
 
     return fileId;
@@ -483,6 +501,15 @@ export const createBinaryFile = mutation({
   handler: async (ctx, args) => {
     validateInternalKey(args.internalKey);
 
+    // Calculate the path for this binary file
+    let path = args.name;
+    if (args.parentId) {
+      const parent = await ctx.db.get(args.parentId);
+      if (parent) {
+        path = `${parent.path}/${args.name}`;
+      }
+    }
+
     const files = await ctx.db
       .query("files")
       .withIndex("by_project_parent", (q) =>
@@ -502,9 +529,9 @@ export const createBinaryFile = mutation({
       projectId: args.projectId,
       name: args.name,
       type: "file",
+      path: path,
       storageId: args.storageId,
       parentId: args.parentId,
-      updatedAt: Date.now(),
     });
     
     return fileId;

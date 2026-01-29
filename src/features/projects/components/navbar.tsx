@@ -5,7 +5,6 @@ import Image from "next/image";
 import { useState } from "react";
 import { CloudCheckIcon, LoaderIcon } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
-import { Poppins } from "next/font/google";
 import { formatDistanceToNow } from "date-fns";
 
 import {
@@ -26,11 +25,6 @@ import { cn } from "@/lib/utils";
 
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useProject, useRenameProject } from "../hooks/use-projects";
-
-const font = Poppins({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-})
 
 export const Navbar = ({
   projectId
@@ -91,8 +85,7 @@ export const Navbar = ({
                     />
                     <span
                       className={cn(
-                        "text-sm font-medium",
-                        font.className,
+                        "text-sm font-medium font-poppins",
                       )}
                     >
                       Polaris

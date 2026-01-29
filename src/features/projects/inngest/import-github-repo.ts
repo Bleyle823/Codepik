@@ -13,7 +13,7 @@ interface ImportGithubRepoEvent {
   owner: string;
   repo: string;
   projectId: Id<"projects">;
-  githubToken: string;
+  githubToken?: string; // Make optional for public repos
 }
 
 export const importGithubRepo = inngest.createFunction(
@@ -44,7 +44,10 @@ export const importGithubRepo = inngest.createFunction(
       throw new NonRetriableError("POLARIS_CONVEX_INTERNAL_KEY is not configured");
     };
 
-    const octokit = new Octokit({ auth: githubToken });
+    // Create Octokit instance with optional auth for public repos
+    const octokit = new Octokit({ 
+      auth: githubToken || undefined 
+    });
 
     // Cleanup any existing files in the project
     await step.run("cleanup-project", async () => {
