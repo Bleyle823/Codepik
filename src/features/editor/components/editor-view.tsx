@@ -84,6 +84,7 @@ export const EditorView = ({ projectId }: { projectId: Id<"projects"> }) => {
                   key={activeFile._id}
                   fileName={activeFile.name}
                   initialValue={activeFile.content}
+                  fileId={activeFile._id} // Pass fileId for real-time sync
                   onChange={(content: string) => {
                     if (timeoutRef.current) {
                       clearTimeout(timeoutRef.current);
@@ -133,6 +134,7 @@ export const EditorView = ({ projectId }: { projectId: Id<"projects"> }) => {
                 key={activeFile._id}
                 fileName={activeFile.name}
                 initialValue={activeFile.content}
+                fileId={activeFile._id} // Pass fileId for real-time sync
                 onChange={(content: string) => {
                   if (timeoutRef.current) {
                     clearTimeout(timeoutRef.current);

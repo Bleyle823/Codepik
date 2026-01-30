@@ -13,6 +13,7 @@ import { DEFAULT_CONVERSATION_TITLE } from "../constants";
 import { createReadFilesTool } from './tools/read-files';
 import { createListFilesTool } from './tools/list-files';
 import { createUpdateFileTool } from './tools/update-file';
+import { createEnhancedUpdateFileTool } from './tools/enhanced-update-file';
 import { createCreateFilesTool } from './tools/create-files';
 import { createCreateFolderTool } from './tools/create-folder';
 import { createRenameFileTool } from './tools/rename-file';
@@ -163,6 +164,7 @@ export const processMessage = inngest.createFunction(
         createListFilesTool({ internalKey, projectId }),
         createReadFilesTool({ internalKey }),
         createUpdateFileTool({ internalKey }),
+        createEnhancedUpdateFileTool({ internalKey }), // Enhanced version with metadata
         createCreateFilesTool({ projectId, internalKey }),
         createCreateFolderTool({ projectId, internalKey }),
         createRenameFileTool({ internalKey }),

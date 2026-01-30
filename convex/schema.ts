@@ -23,10 +23,20 @@ export default defineSchema({
     content: v.optional(v.string()),
     path: v.string(),
     storageId: v.optional(v.id("_storage")), // For binary files
+    updatedAt: v.optional(v.number()),
+    // AI Edit Metadata for real-time synchronization
+    lastEditMetadata: v.optional(v.object({
+      type: v.union(v.literal("ai-edit"), v.literal("ai-create"), v.literal("ai-refactor"), v.literal("ai-fix")),
+      summary: v.string(),
+      changedLines: v.optional(v.array(v.number())),
+      timestamp: v.number(),
+      editId: v.string(),
+    })),
   })
     .index("by_project", ["projectId"])
     .index("by_parent", ["parentId"])
-    .index("by_project_parent", ["projectId", "parentId"]),
+    .index("by_project_parent", ["projectId", "parentId"])
+    .index("by_updated_at", ["updatedAt"]),
 
   conversations: defineTable({
     projectId: v.id("projects"),

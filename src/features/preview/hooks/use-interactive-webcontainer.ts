@@ -5,7 +5,7 @@ import {
   buildFileTree,
   getFilePath
 } from "@/features/preview/utils/file-tree";
-import { useFiles, useFilePath } from "@/features/projects/hooks/use-files";
+import { useFiles, useFile } from "@/features/projects/hooks/use-files";
 
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -67,17 +67,24 @@ export const useInteractiveWebContainer = ({
 
   // Fetch files from Convex (auto-updates on changes)
   const files = useFiles(projectId);
-  const activeFilePath = useFilePath(activeFileId);
+  const activeFile = useFile(activeFileId);
 
   // Get directory of active file
   const getActiveDirectory = useCallback(() => {
-    if (!activeFilePath) return "/";
+    if (!activeFile || !files) return "/";
     
-    const pathParts = activeFilePath.split("/");
+    // Create files map for getFilePath utility
+    const filesMap = new Map(files.map((f) => [f._id, f]));
+    
+    // Get full file path as string
+    const fullPath = getFilePath(activeFile, filesMap);
+    
+    // Extract directory by removing filename
+    const pathParts = fullPath.split("/");
     pathParts.pop(); // Remove filename
     const directory = pathParts.join("/") || "/";
     return directory === "" ? "/" : directory;
-  }, [activeFilePath]);
+  }, [activeFile, files]);
 
   // Update current directory when active file changes
   useEffect(() => {

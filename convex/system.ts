@@ -214,6 +214,39 @@ export const updateFile = mutation({
   },
 });
 
+// Enhanced version with edit metadata for real-time synchronization
+export const updateFileWithMetadata = mutation({
+  args: {
+    internalKey: v.string(),
+    fileId: v.id("files"),
+    content: v.string(),
+    editMetadata: v.object({
+      type: v.union(v.literal("ai-edit"), v.literal("ai-create"), v.literal("ai-refactor"), v.literal("ai-fix")),
+      summary: v.string(),
+      changedLines: v.optional(v.array(v.number())),
+      timestamp: v.number(),
+      editId: v.string(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    validateInternalKey(args.internalKey);
+
+    const file = await ctx.db.get(args.fileId);
+
+    if (!file) {
+      throw new Error("File not found");
+    }
+
+    await ctx.db.patch(args.fileId, {
+      content: args.content,
+      updatedAt: Date.now(),
+      lastEditMetadata: args.editMetadata,
+    });
+
+    return args.fileId;
+  },
+});
+
 // Used for Agent "CreateFile" tool
 export const createFile = mutation({
   args: {
