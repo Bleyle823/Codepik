@@ -1,4 +1,4 @@
-import { createAgent, anthropic, createNetwork } from '@inngest/agent-kit';
+import { createAgent, openai, createNetwork } from '@inngest/agent-kit';
 
 import { inngest } from "@/inngest/client";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -117,8 +117,8 @@ export const processMessage = inngest.createFunction(
        const titleAgent = createAgent({
         name: "title-generator",
         system: TITLE_GENERATOR_SYSTEM_PROMPT,
-        model: anthropic({
-          model: "claude-3-5-haiku-20241022",
+        model: openai({
+          model: "gpt-4o-mini",
           defaultParameters: { temperature: 0, max_tokens: 50 },
         }),
        });
@@ -155,8 +155,8 @@ export const processMessage = inngest.createFunction(
       name: "polaris",
       description: "An expert AI coding assistant",
       system: systemPrompt,
-       model: anthropic({
-        model: "claude-opus-4-20250514",
+       model: openai({
+        model: "gpt-4o",
         defaultParameters: { temperature: 0.3, max_tokens: 16000 }
        }),
        tools: [

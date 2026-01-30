@@ -1,9 +1,7 @@
-import AuthExample from "@/components/AuthExample";
+import { ProjectsView } from "@/features/projects/components/projects-view";
 
-export default function Home() {
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <AuthExample />
-    </div>
-  );
-}
+const Home = () => {
+  return <ProjectsView />
+};
+
+export default Home;

@@ -2,8 +2,7 @@ import { generateText, Output } from "ai";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { anthropic } from "@ai-sdk/anthropic";
-// import { google } from "@ai-sdk/google";
+import { openai } from "@ai-sdk/openai";
 
 const suggestionSchema = z.object({
   suggestion: z
@@ -83,7 +82,7 @@ export async function POST(request: Request) {
       .replace("{lineNumber}", lineNumber.toString());
 
     const { output } = await generateText({
-      model: anthropic("claude-3-7-sonnet-20250219"),
+      model: openai("gpt-4o-mini"),
       output: Output.object({ schema: suggestionSchema }),
       prompt,
     });

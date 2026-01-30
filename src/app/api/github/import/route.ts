@@ -21,16 +21,10 @@ function parseGitHubUrl(url: string) {
 }
 
 export async function POST(request: Request) {
-  const { userId, has } = await auth();
+  const { userId } = await auth();
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const hasPro = has({ plan: "pro" });
-
-  if (!hasPro) {
-    return NextResponse.json({ error: "Pro plan required" }, { status: 403 });
   }
 
   const body = await request.json();
@@ -40,18 +34,18 @@ export async function POST(request: Request) {
   // https://github.com/AntonioErdeljac/cursor-dev
   // { owner: "AntonioErdeljac", repo: "cursor-dev" }
 
-  const client = await clerkClient();
-  const tokens = await client.users.getUserOauthAccessToken(
-    userId,
-    "github"
-  );
-  const githubToken = tokens.data[0]?.token;
-
-  if (!githubToken) {
-    return NextResponse.json(
-      { error: "GitHub not connected. Please reconnect your GitHub account." },
-      { status: 400 }
+  // Try to get GitHub token, but make it optional for public repos
+  let githubToken: string | undefined;
+  
+  try {
+    const client = await clerkClient();
+    const tokens = await client.users.getUserOauthAccessToken(
+      userId,
+      "github"
     );
+    githubToken = tokens.data[0]?.token;
+  } catch (error) {
+    console.log("No GitHub OAuth token found, will try public access");
   }
 
   const internalKey = process.env.POLARIS_CONVEX_INTERNAL_KEY;
