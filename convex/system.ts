@@ -50,6 +50,7 @@ export const createMessage = mutation({
       role: args.role,
       content: args.content,
       status: args.status,
+      updatedAt: Date.now(),
     });
 
     // Update conversation's updatedAt
