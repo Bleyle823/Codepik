@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { generateText } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { openai } from "@ai-sdk/openai";
 
 // Test endpoint to verify AI functionality
 export async function GET() {
@@ -12,9 +12,9 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Test Anthropic API connection
+    // Test OpenAI API connection
     const response = await generateText({
-      model: anthropic("claude-3-5-haiku-20241022"),
+      model: openai("gpt-4o-mini"),
       prompt: "Say 'AI is working!' in exactly 3 words.",
       maxTokens: 10,
     });
@@ -31,21 +31,21 @@ export async function GET() {
     console.error("AI test error:", error);
     
     if (error instanceof Error) {
-      // Check for specific Anthropic errors
-      if (error.message.includes("credit balance")) {
+      // Check for specific OpenAI errors
+      if (error.message.includes("quota") || error.message.includes("billing")) {
         return NextResponse.json({
           success: false,
-          error: "ANTHROPIC_CREDITS_LOW",
-          message: "Your Anthropic API credits are too low. Please add credits at console.anthropic.com",
+          error: "OPENAI_QUOTA_EXCEEDED",
+          message: "Your OpenAI API quota has been exceeded. Please check your billing at platform.openai.com",
           details: error.message,
         }, { status: 402 }); // Payment Required
       }
 
-      if (error.message.includes("API key")) {
+      if (error.message.includes("API key") || error.message.includes("authentication")) {
         return NextResponse.json({
           success: false,
-          error: "ANTHROPIC_API_KEY_INVALID",
-          message: "Invalid Anthropic API key. Please check your ANTHROPIC_API_KEY in .env.local",
+          error: "OPENAI_API_KEY_INVALID",
+          message: "Invalid OpenAI API key. Please check your OPENAI_API_KEY in .env.local",
           details: error.message,
         }, { status: 401 });
       }

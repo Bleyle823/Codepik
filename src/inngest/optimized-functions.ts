@@ -1,7 +1,7 @@
 // Optimized Inngest functions for better performance and reliability
 import { generateText } from "ai";
 import { inngest } from "./client";
-import { anthropic } from "@ai-sdk/anthropic";
+import { openai } from "@ai-sdk/openai";
 import { firecrawl } from "@/lib/firecrawl";
 
 const URL_REGEX = /https?:\/\/[^\s]+/g;
@@ -99,7 +99,7 @@ export const optimizedDemoGenerate = inngest.createFunction(
 
       try {
         const response = await generateText({
-          model: anthropic('claude-3-haiku-20240307'),
+          model: openai('gpt-4o-mini'),
           prompt: finalPrompt,
           maxTokens: 1000, // Limit token usage
           experimental_telemetry: {
