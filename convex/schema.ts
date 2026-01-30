@@ -40,7 +40,7 @@ export default defineSchema({
     projectId: v.id("projects"),
     role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
     content: v.string(),
-    status: v.optional(v.union(v.literal("pending"), v.literal("completed"), v.literal("failed"))),
+    status: v.optional(v.union(v.literal("pending"), v.literal("processing"), v.literal("completed"), v.literal("failed"), v.literal("cancelled"))),
     updatedAt: v.number(),
   })
     .index("by_conversation", ["conversationId"])

@@ -7,6 +7,7 @@ export async function GET() {
       hasEventKey: !!process.env.INNGEST_EVENT_KEY,
       hasSigningKey: !!process.env.INNGEST_SIGNING_KEY,
       hasInternalKey: !!process.env.POLARIS_CONVEX_INTERNAL_KEY,
+      hasOpenAIKey: !!process.env.OPENAI_API_KEY,
     };
 
     return NextResponse.json({
