@@ -6,11 +6,19 @@ import { FitAddon } from "@xterm/addon-fit";
 
 import "@xterm/xterm/css/xterm.css";
 
-interface PreviewTerminalProps {
+interface InteractivePreviewTerminalProps {
   output: string;
+  currentDirectory: string;
+  onInput?: (input: string) => void;
+  isInteractive?: boolean;
 }
 
-export const PreviewTerminal = ({ output }: PreviewTerminalProps) => {
+export const InteractivePreviewTerminal = ({ 
+  output, 
+  currentDirectory, 
+  onInput, 
+  isInteractive = false 
+}: InteractivePreviewTerminalProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -26,6 +34,8 @@ export const PreviewTerminal = ({ output }: PreviewTerminalProps) => {
       fontSize: 12,
       fontFamily: "monospace",
       theme: { background: "#1f2228" },
+      cursorBlink: true,
+      cursorStyle: "block",
     });
 
     const fitAddon = new FitAddon();
@@ -35,21 +45,44 @@ export const PreviewTerminal = ({ output }: PreviewTerminalProps) => {
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    // Add keyboard handler for clearing terminal
+    // Add keyboard handler
     terminal.onKey(({ key, domEvent }) => {
-      // Clear terminal on Backspace key
-      if (domEvent.key === 'Backspace') {
-        terminal.clear();
-        lastLengthRef.current = 0;
-        domEvent.preventDefault();
-      }
-      // Clear terminal on Ctrl+L (common terminal clear shortcut)
-      else if (domEvent.ctrlKey && domEvent.key === 'l') {
-        terminal.clear();
-        lastLengthRef.current = 0;
-        domEvent.preventDefault();
+      if (isInteractive && onInput) {
+        // Handle special keys
+        if (domEvent.key === 'Enter') {
+          onInput('\r');
+        } else if (domEvent.key === 'Backspace') {
+          onInput('\b');
+        } else if (domEvent.key === 'Tab') {
+          onInput('\t');
+          domEvent.preventDefault();
+        } else if (domEvent.ctrlKey) {
+          // Handle Ctrl combinations
+          if (domEvent.key === 'c') {
+            onInput('\x03'); // Ctrl+C
+          } else if (domEvent.key === 'l') {
+            // Ctrl+L for clear (but don't prevent default to allow our clear functionality)
+            terminal.clear();
+            lastLengthRef.current = 0;
+            domEvent.preventDefault();
+            return;
+          }
+        } else if (key.length === 1) {
+          // Regular character
+          onInput(key);
+        }
+      } else {
+        // Non-interactive mode - just handle clear shortcuts
+        if (domEvent.key === 'Backspace' || (domEvent.ctrlKey && domEvent.key === 'l')) {
+          terminal.clear();
+          lastLengthRef.current = 0;
+          domEvent.preventDefault();
+        }
       }
     });
+
+    // Focus terminal for input
+    terminal.focus();
 
     // Write existing output on mount
     if (output) {
@@ -68,9 +101,7 @@ export const PreviewTerminal = ({ output }: PreviewTerminalProps) => {
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-    // "output" does not need to be a dependency since it is not intended
-    // to update anything, just used on mount
-  }, []);
+  }, [isInteractive, onInput]);
 
   // Write output
   useEffect(() => {
@@ -87,6 +118,13 @@ export const PreviewTerminal = ({ output }: PreviewTerminalProps) => {
       lastLengthRef.current = output.length;
     }
   }, [output]);
+
+  // Focus terminal when it becomes interactive
+  useEffect(() => {
+    if (isInteractive && terminalRef.current) {
+      terminalRef.current.focus();
+    }
+  }, [isInteractive]);
 
   return (
     <div

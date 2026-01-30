@@ -7,11 +7,19 @@ import { TerminalSquareIcon } from "lucide-react";
 
 import "@xterm/xterm/css/xterm.css";
 
-interface EditorTerminalProps {
+interface InteractiveTerminalProps {
   output: string;
+  currentDirectory: string;
+  onInput?: (input: string) => void;
+  isInteractive?: boolean;
 }
 
-export const EditorTerminal = ({ output }: EditorTerminalProps) => {
+export const InteractiveTerminal = ({ 
+  output, 
+  currentDirectory, 
+  onInput, 
+  isInteractive = false 
+}: InteractiveTerminalProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -27,6 +35,8 @@ export const EditorTerminal = ({ output }: EditorTerminalProps) => {
       fontSize: 12,
       fontFamily: "monospace",
       theme: { background: "#1f2228" },
+      cursorBlink: true,
+      cursorStyle: "block",
     });
 
     const fitAddon = new FitAddon();
@@ -36,21 +46,44 @@ export const EditorTerminal = ({ output }: EditorTerminalProps) => {
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    // Add keyboard handler for clearing terminal
+    // Add keyboard handler
     terminal.onKey(({ key, domEvent }) => {
-      // Clear terminal on Backspace key
-      if (domEvent.key === 'Backspace') {
-        terminal.clear();
-        lastLengthRef.current = 0;
-        domEvent.preventDefault();
-      }
-      // Clear terminal on Ctrl+L (common terminal clear shortcut)
-      else if (domEvent.ctrlKey && domEvent.key === 'l') {
-        terminal.clear();
-        lastLengthRef.current = 0;
-        domEvent.preventDefault();
+      if (isInteractive && onInput) {
+        // Handle special keys
+        if (domEvent.key === 'Enter') {
+          onInput('\r');
+        } else if (domEvent.key === 'Backspace') {
+          onInput('\b');
+        } else if (domEvent.key === 'Tab') {
+          onInput('\t');
+          domEvent.preventDefault();
+        } else if (domEvent.ctrlKey) {
+          // Handle Ctrl combinations
+          if (domEvent.key === 'c') {
+            onInput('\x03'); // Ctrl+C
+          } else if (domEvent.key === 'l') {
+            // Ctrl+L for clear (but don't prevent default to allow our clear functionality)
+            terminal.clear();
+            lastLengthRef.current = 0;
+            domEvent.preventDefault();
+            return;
+          }
+        } else if (key.length === 1) {
+          // Regular character
+          onInput(key);
+        }
+      } else {
+        // Non-interactive mode - just handle clear shortcuts
+        if (domEvent.key === 'Backspace' || (domEvent.ctrlKey && domEvent.key === 'l')) {
+          terminal.clear();
+          lastLengthRef.current = 0;
+          domEvent.preventDefault();
+        }
       }
     });
+
+    // Focus terminal for input
+    terminal.focus();
 
     // Write existing output on mount
     if (output) {
@@ -69,7 +102,7 @@ export const EditorTerminal = ({ output }: EditorTerminalProps) => {
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, []);
+  }, [isInteractive, onInput]);
 
   // Write output
   useEffect(() => {
@@ -87,11 +120,22 @@ export const EditorTerminal = ({ output }: EditorTerminalProps) => {
     }
   }, [output]);
 
+  // Focus terminal when it becomes interactive
+  useEffect(() => {
+    if (isInteractive && terminalRef.current) {
+      terminalRef.current.focus();
+    }
+  }, [isInteractive]);
+
   return (
     <div className="h-full flex flex-col bg-background border-t">
       <div className="h-7 flex items-center px-3 text-xs gap-1.5 text-muted-foreground border-b border-border/50 shrink-0">
         <TerminalSquareIcon className="size-3" />
-        Terminal
+        <span>Terminal</span>
+        {isInteractive && (
+          <span className="ml-auto text-green-500">● Interactive</span>
+        )}
+        <span className="text-blue-400">{currentDirectory}</span>
       </div>
       <div
         ref={containerRef}

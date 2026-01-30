@@ -3,14 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { Allotment } from "allotment";
 
 import { useFile, useUpdateFile } from "@/features/projects/hooks/use-files";
-import { useWebContainer } from "@/features/preview/hooks/use-webcontainer";
+import { useInteractiveWebContainer } from "@/features/preview/hooks/use-interactive-webcontainer";
 import { useProject } from "@/features/projects/hooks/use-projects";
 
 import { CodeEditor } from "./code-editor";
 import { useEditor } from "../hooks/use-editor";
 import { TopNavigation } from "./top-navigation";
 import { FileBreadcrumbs } from "./file-breadcrumbs";
-import { EditorTerminal } from "./editor-terminal";
+import { InteractiveTerminal } from "./interactive-terminal";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { AlertTriangleIcon, TerminalSquareIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,9 +25,15 @@ export const EditorView = ({ projectId }: { projectId: Id<"projects"> }) => {
   const [showTerminal, setShowTerminal] = useState(false);
   
   const project = useProject(projectId);
-  const { terminalOutput } = useWebContainer({
+  const { 
+    terminalOutput, 
+    currentDirectory, 
+    sendInput, 
+    isInteractive 
+  } = useInteractiveWebContainer({
     projectId,
     enabled: true,
+    activeFileId: activeTabId,
     settings: project?.settings,
   });
 
@@ -101,7 +107,12 @@ export const EditorView = ({ projectId }: { projectId: Id<"projects"> }) => {
               )}
             </Allotment.Pane>
             <Allotment.Pane minSize={100} maxSize={500} preferredSize={200}>
-              <EditorTerminal output={terminalOutput} />
+              <InteractiveTerminal 
+                output={terminalOutput} 
+                currentDirectory={currentDirectory}
+                onInput={sendInput}
+                isInteractive={isInteractive}
+              />
             </Allotment.Pane>
           </Allotment>
         ) : (
