@@ -6,13 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import { Button } from '@/components/ui/button';
+import { RefreshCw } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   LineChart,
   Line,
@@ -33,7 +35,7 @@ interface MetricCardProps {
 function MetricCard({ title, value, change, description }: MetricCardProps) {
   const changeColor = change && change > 0 ? 'text-green-600' : 'text-red-600';
   const changeIcon = change && change > 0 ? '↗' : '↘';
-  
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -84,17 +86,17 @@ function TraceTimelineChart({ analytics }: { analytics?: TraceAnalytics }) {
             <XAxis dataKey="date" />
             <YAxis />
             <Tooltip />
-            <Line 
-              type="monotone" 
-              dataKey="interactions" 
-              stroke="#3b82f6" 
+            <Line
+              type="monotone"
+              dataKey="interactions"
+              stroke="#3b82f6"
               strokeWidth={2}
               name="Interactions"
             />
-            <Line 
-              type="monotone" 
-              dataKey="avgResponseTime" 
-              stroke="#10b981" 
+            <Line
+              type="monotone"
+              dataKey="avgResponseTime"
+              stroke="#10b981"
               strokeWidth={2}
               name="Avg Response Time (ms)"
             />
@@ -194,10 +196,10 @@ function QualityMetricsChart({ metrics }: { metrics?: DashboardMetrics }) {
             </div>
             <Progress value={metrics.qualityMetrics.avgQuality * 100} className="mt-2" />
           </div>
-          
+
           <div className="flex items-center gap-2">
             <Badge variant={metrics.qualityMetrics.qualityTrend > 0 ? 'default' : 'destructive'}>
-              {metrics.qualityMetrics.qualityTrend > 0 ? '↗' : '↘'} 
+              {metrics.qualityMetrics.qualityTrend > 0 ? '↗' : '↘'}
               {Math.abs(metrics.qualityMetrics.qualityTrend).toFixed(1)}%
             </Badge>
             <span className="text-sm text-muted-foreground">
@@ -266,26 +268,26 @@ export function OpikAnalyticsDashboard() {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Check connection first
       const isConnected = await dashboardService.checkConnection();
       setConnectionStatus(isConnected ? 'connected' : 'disconnected');
-      
+
       if (!isConnected) {
         setError('Unable to connect to Opik. Using cached data.');
       }
-      
+
       // Load all dashboard data
       const [metrics, analytics, stats] = await Promise.all([
         dashboardService.getDashboardMetrics(),
         dashboardService.getTraceAnalytics(timeRange),
         dashboardService.getRealTimeStats()
       ]);
-      
+
       setDashboardMetrics(metrics);
       setTraceAnalytics(analytics);
       setRealTimeStats(stats);
-      
+
     } catch (err) {
       setError('Failed to load analytics data');
       console.error('Analytics loading error:', err);
@@ -296,7 +298,7 @@ export function OpikAnalyticsDashboard() {
 
   useEffect(() => {
     loadAnalytics();
-    
+
     // Set up event listeners for real-time updates
     const handleMetricsUpdate = (event: string, data: any) => {
       if (event === 'metrics-updated') {
@@ -309,14 +311,14 @@ export function OpikAnalyticsDashboard() {
     };
 
     dashboardService.addEventListener(handleMetricsUpdate);
-    
+
     // Set up periodic refresh
     const refreshInterval = setInterval(() => {
       if (connectionStatus === 'connected') {
         dashboardService.getRealTimeStats().then(setRealTimeStats);
       }
     }, 30000); // Refresh every 30 seconds
-    
+
     return () => {
       dashboardService.removeEventListener(handleMetricsUpdate);
       clearInterval(refreshInterval);
@@ -343,10 +345,10 @@ export function OpikAnalyticsDashboard() {
           <p className="text-sm text-muted-foreground mt-1">
             Make sure Opik is properly configured with API key and workspace
           </p>
-          <Button 
-            onClick={loadAnalytics} 
-            variant="outline" 
-            size="sm" 
+          <Button
+            onClick={loadAnalytics}
+            variant="outline"
+            size="sm"
             className="mt-2"
           >
             Retry Connection
@@ -363,20 +365,19 @@ export function OpikAnalyticsDashboard() {
         <div>
           <h2 className="text-2xl font-bold">Opik Analytics Dashboard</h2>
           <div className="flex items-center gap-2 mt-1">
-            <div className={`w-2 h-2 rounded-full ${
-              connectionStatus === 'connected' ? 'bg-green-500' : 
-              connectionStatus === 'disconnected' ? 'bg-red-500' : 'bg-yellow-500'
-            }`} />
+            <div className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' :
+                connectionStatus === 'disconnected' ? 'bg-red-500' : 'bg-yellow-500'
+              }`} />
             <span className="text-sm text-muted-foreground">
-              {connectionStatus === 'connected' ? 'Connected to Opik' : 
-               connectionStatus === 'disconnected' ? 'Disconnected' : 'Checking connection...'}
+              {connectionStatus === 'connected' ? 'Connected to Opik' :
+                connectionStatus === 'disconnected' ? 'Disconnected' : 'Checking connection...'}
             </span>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
-          <select 
-            value={timeRange} 
+          <select
+            value={timeRange}
             onChange={(e) => setTimeRange(e.target.value as any)}
             className="text-sm border rounded px-2 py-1"
           >
