@@ -1,4 +1,4 @@
-import { opikClient, OPIK_PROJECT_NAME } from '@/lib/opik-client';
+import { safeOpikClient } from '@/lib/opik-client-safe';
 
 export interface ChatContext {
   conversationId: string;

@@ -14,6 +14,7 @@ import { selectionTooltip } from "../extensions/selection-tooltip";
 import { aiEditIndicators, useAIEditHighlighter } from "../extensions/ai-edit-indicators";
 import { useRealTimeFileSync } from "../hooks/use-real-time-file-sync";
 import { AIEditingOverlay, AIEditSuccessNotification } from "./ai-editing-overlay";
+// Opik integration moved to server-side API
 import { Id } from "../../../../convex/_generated/dataModel";
 
 interface Props {
@@ -70,7 +71,24 @@ export const CodeEditor = ({
           if (update.docChanged) {
             // Mark user editing for conflict prevention
             markUserEditing();
-            onChange(update.state.doc.toString());
+            
+            // Track changes with server-side Opik API
+            const oldContent = update.startState.doc.toString();
+            const newContent = update.state.doc.toString();
+            
+            // Send analytics to server (non-blocking)
+            fetch('/api/opik/track-keystroke', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                oldContent: oldContent.length,
+                newContent: newContent.length,
+                linesChanged: Math.abs(newContent.split('\n').length - oldContent.split('\n').length),
+                timestamp: Date.now()
+              })
+            }).catch(() => {}); // Ignore errors for analytics
+            
+            onChange(newContent);
           }
         })
       ],

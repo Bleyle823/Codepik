@@ -1,4 +1,4 @@
-import { opikClient, OPIK_PROJECT_NAME } from '@/lib/opik-client';
+import { safeOpikClient } from '@/lib/opik-client-safe';
 
 export interface OptimizationRule {
   name: string;
@@ -49,7 +49,7 @@ export class RealTimeOptimizer {
     await this.initializeOptimization();
 
     try {
-      const trace = opikClient.trace({
+      const trace = await safeOpikClient.createTrace({
         name: 'request-optimization',
         input: { 
           requestType: context.requestType,
@@ -125,8 +125,9 @@ export class RealTimeOptimizer {
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - 7); // Last 7 days
 
-      const traces = await opikClient.searchTraces({
-        projectName: OPIK_PROJECT_NAME,
+      // Mock search for now - replace with MCP call when available
+      const traces = [];
+        // projectName: 'codepik-ide',
         filters: { 
           status: 'completed',
           'created_at': { 

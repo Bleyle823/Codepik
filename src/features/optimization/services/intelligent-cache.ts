@@ -1,4 +1,4 @@
-import { opikClient } from '@/lib/opik-client';
+import { safeOpikClient } from '@/lib/opik-client-safe';
 import { createHash } from 'crypto';
 
 export interface AIRequest {
@@ -47,10 +47,10 @@ export class IntelligentCacheSystem {
     try {
       // Load cache configuration and historical data
       await this.loadCacheConfiguration();
-      
+
       // Start cleanup interval
       setInterval(() => this.cleanupExpiredEntries(), 60 * 60 * 1000); // Every hour
-      
+
       this.initialized = true;
       console.log('Intelligent cache system initialized');
     } catch (error) {
@@ -65,7 +65,7 @@ export class IntelligentCacheSystem {
     try {
       const cacheKey = this.generateCacheKey(request);
       const cached = this.cache.get(cacheKey);
-      
+
       if (!cached || this.isExpired(cached)) {
         return null;
       }
@@ -73,22 +73,22 @@ export class IntelligentCacheSystem {
       // Update access statistics
       cached.usage++;
       cached.lastAccessed = Date.now();
-      
+
       // Track cache hit
-      const trace = opikClient.trace({
+      const trace = await safeOpikClient.createTrace({
         name: 'cache-hit',
-        input: { 
+        input: {
           requestType: request.type,
           cacheKey: cacheKey.substring(0, 16) + '...' // Truncated for privacy
         },
-        output: { 
-          cached: true, 
+        output: {
+          cached: true,
           age: Date.now() - cached.timestamp,
           quality: cached.quality,
           usage: cached.usage
         },
-        metadata: { 
-          feature: 'caching', 
+        metadata: {
+          feature: 'caching',
           userId: request.userId,
           requestType: request.type
         }
@@ -111,17 +111,17 @@ export class IntelligentCacheSystem {
 
     try {
       const cacheKey = this.generateCacheKey(request);
-      
+
       // Analyze if this response should be cached
       const shouldCache = await this.shouldCacheResponse(request, response);
-      
+
       if (!shouldCache) {
         return;
       }
 
       // Calculate expiration time based on quality and type
       const ttl = this.calculateTTL(request, response);
-      
+
       const cacheEntry: CacheEntry = {
         response,
         timestamp: Date.now(),
@@ -137,21 +137,21 @@ export class IntelligentCacheSystem {
       }
 
       this.cache.set(cacheKey, cacheEntry);
-      
+
       // Track cache store
-      opikClient.trace({
+      await safeOpikClient.createTrace({
         name: 'cache-store',
-        input: { 
+        input: {
           requestType: request.type,
           quality: response.qualityScore,
           ttl: ttl / 1000 / 60 // TTL in minutes
         },
-        output: { 
-          cached: true, 
+        output: {
+          cached: true,
           cacheSize: this.cache.size
         },
-        metadata: { 
-          feature: 'caching', 
+        metadata: {
+          feature: 'caching',
           userId: request.userId,
           requestType: request.type
         }
@@ -165,14 +165,14 @@ export class IntelligentCacheSystem {
   async invalidateUserCache(userId: string): Promise<void> {
     try {
       let invalidatedCount = 0;
-      
+
       for (const [key, entry] of this.cache.entries()) {
         if (key.includes(userId)) {
           this.cache.delete(key);
           invalidatedCount++;
         }
       }
-      
+
       console.log(`Invalidated ${invalidatedCount} cache entries for user ${userId}`);
     } catch (error) {
       console.error('Cache invalidation error:', error);
@@ -231,29 +231,29 @@ export class IntelligentCacheSystem {
       context: this.normalizeContext(request.context),
       model: request.model || 'default'
     };
-    
+
     const keyString = JSON.stringify(keyData);
     const hash = createHash('sha256').update(keyString).digest('hex');
-    
+
     return `${request.type}-${request.userId}-${hash}`;
   }
 
   private normalizeContext(context: any): any {
     if (!context) return null;
-    
+
     // Remove volatile data that shouldn't affect caching
     const normalized = { ...context };
-    
+
     // Remove timestamps, IDs, and other volatile fields
     delete normalized.timestamp;
     delete normalized.sessionId;
     delete normalized.requestId;
-    
+
     // Normalize file paths (remove user-specific parts)
     if (normalized.fileName) {
       normalized.fileName = normalized.fileName.split('/').pop();
     }
-    
+
     return normalized;
   }
 
@@ -280,7 +280,7 @@ export class IntelligentCacheSystem {
 
       // Use Opik analytics to determine caching strategy
       const similarRequests = await this.findSimilarRequests(request);
-      
+
       // Cache if response quality is high and similar requests exist
       return response.qualityScore > 0.8 && similarRequests.length > 2;
     } catch (error) {
@@ -291,7 +291,12 @@ export class IntelligentCacheSystem {
 
   private async findSimilarRequests(request: AIRequest): Promise<any[]> {
     try {
-      const traces = await opikClient.searchTraces({
+      // Mock search for now - replace with MCP call when available
+      const traces: any[] = [];
+
+      /* 
+      // Placeholder for future implementation:
+      await safeOpikClient.searchTraces({
         projectName: 'codepik-ide',
         query: `request_similarity:high`,
         filters: {
@@ -300,7 +305,8 @@ export class IntelligentCacheSystem {
         },
         size: 10
       });
-      
+      */
+
       return traces || [];
     } catch (error) {
       console.error('Error finding similar requests:', error);
@@ -310,14 +316,14 @@ export class IntelligentCacheSystem {
 
   private calculateTTL(request: AIRequest, response: AIResponse): number {
     let ttl = this.defaultTTL;
-    
+
     // Adjust TTL based on quality
     if (response.qualityScore > 0.9) {
       ttl *= 2; // High quality responses last longer
     } else if (response.qualityScore < 0.7) {
       ttl *= 0.5; // Low quality responses expire faster
     }
-    
+
     // Adjust TTL based on request type
     switch (request.type) {
       case 'suggestion':
@@ -330,7 +336,7 @@ export class IntelligentCacheSystem {
         ttl *= 0.3; // Chat responses are often context-specific
         break;
     }
-    
+
     return Math.max(ttl, 60 * 60 * 1000); // Minimum 1 hour
   }
 
@@ -343,28 +349,28 @@ export class IntelligentCacheSystem {
       /\bAPI[_\s]?KEY\b/i, // API keys
       /\bTOKEN\b/i // Tokens
     ];
-    
+
     return personalPatterns.some(pattern => pattern.test(content));
   }
 
   private evictLeastValuable(): void {
     let leastValuableKey: string | null = null;
     let leastValue = Infinity;
-    
+
     for (const [key, entry] of this.cache.entries()) {
       // Calculate value score based on quality, usage, and recency
       const ageScore = Math.max(0, 1 - (Date.now() - entry.lastAccessed) / (7 * 24 * 60 * 60 * 1000));
       const usageScore = Math.min(1, entry.usage / 10);
       const qualityScore = entry.quality;
-      
+
       const valueScore = (qualityScore * 0.4) + (usageScore * 0.4) + (ageScore * 0.2);
-      
+
       if (valueScore < leastValue) {
         leastValue = valueScore;
         leastValuableKey = key;
       }
     }
-    
+
     if (leastValuableKey) {
       this.cache.delete(leastValuableKey);
     }
@@ -373,14 +379,14 @@ export class IntelligentCacheSystem {
   private cleanupExpiredEntries(): void {
     let cleanedCount = 0;
     const now = Date.now();
-    
+
     for (const [key, entry] of this.cache.entries()) {
       if (now > entry.expiresAt) {
         this.cache.delete(key);
         cleanedCount++;
       }
     }
-    
+
     if (cleanedCount > 0) {
       console.log(`Cleaned up ${cleanedCount} expired cache entries`);
     }

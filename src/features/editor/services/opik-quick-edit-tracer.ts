@@ -1,4 +1,4 @@
-import { opikClient } from '@/lib/opik-client';
+import { safeOpikClient } from '@/lib/opik-client-safe';
 
 export interface QuickEditContext {
   selectedCode: string;
@@ -19,7 +19,7 @@ export interface EditResult {
 export class QuickEditTracer {
   async traceQuickEdit(context: QuickEditContext) {
     try {
-      const trace = opikClient.trace({
+      const trace = await safeOpikClient.createTrace({
         name: 'quick-edit',
         input: {
           selectedCodeLength: context.selectedCode.length,
@@ -160,7 +160,7 @@ export class QuickEditTracer {
         );
       }
       
-      await opikClient.addTraceFeedback(traceId, feedback);
+      await safeOpikClient.addFeedback({ id: traceId, ...feedback });
     } catch (error) {
       console.error('Failed to record edit feedback:', error);
     }

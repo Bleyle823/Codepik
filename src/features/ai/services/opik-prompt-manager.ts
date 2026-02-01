@@ -1,4 +1,4 @@
-import { opikClient } from '@/lib/opik-client';
+import { safeOpikClient } from '@/lib/opik-client-safe';
 
 export interface OpikPrompt {
   id: string;

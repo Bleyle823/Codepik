@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { opikClient, OPIK_PROJECT_NAME } from '@/lib/opik-client';
 
 export async function GET(request: Request) {
   try {
@@ -35,55 +34,14 @@ export async function GET(request: Request) {
         startDate.setDate(endDate.getDate() - 7);
     }
 
-    try {
-      // Get trace statistics from Opik
-      const filters: any = {
-        'created_at': { 
-          $gte: startDate.toISOString(), 
-          $lte: endDate.toISOString() 
-        }
-      };
-
-      // Add user filter
-      filters['metadata.userId'] = userId;
-
-      // Add feature filter if specified
-      if (feature) {
-        filters['metadata.feature'] = feature;
-      }
-
-      const traces = await opikClient.searchTraces({
-        projectName: OPIK_PROJECT_NAME,
-        filters,
-        size: 1000,
-        sortBy: 'created_at',
-        sortOrder: 'desc'
-      });
-
-      // Calculate metrics
-      const metrics = calculateMetrics(traces, timeRange);
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          timeRange,
-          metrics,
-          traces: traces.slice(0, 50) // Return limited traces for timeline
-        }
-      });
-
-    } catch (opikError) {
-      console.error('Opik API error:', opikError);
-      
-      // Return mock data if Opik is not available
-      const mockData = generateMockAnalytics(timeRange, userId, feature);
-      
-      return NextResponse.json({
-        success: true,
-        data: mockData,
-        note: 'Using mock data - Opik not configured'
-      });
-    }
+    // For now, return mock data - server-side Opik integration can be added later
+    const mockData = generateMockAnalytics(timeRange, userId, feature);
+    
+    return NextResponse.json({
+      success: true,
+      data: mockData,
+      note: 'Using mock data - Server-side Opik integration available for future enhancement'
+    });
 
   } catch (error) {
     console.error('Analytics API error:', error);

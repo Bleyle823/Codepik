@@ -1,4 +1,4 @@
-import { opikClient, OPIK_PROJECT_NAME } from '@/lib/opik-client';
+import { safeOpikClient } from '@/lib/opik-client-safe';
 
 export interface TeamMember {
   id: string;
@@ -103,7 +103,7 @@ export interface PerformerAnalysis {
 export class TeamAnalyticsService {
   async getTeamInsights(teamId: string, timeRange: TimeRange): Promise<TeamDashboard> {
     try {
-      const trace = opikClient.trace({
+      const trace = await safeOpikClient.createTrace({
         name: 'team-dashboard-generation',
         input: { teamId, timeRange },
         metadata: { feature: 'team-analytics' }
@@ -194,8 +194,9 @@ export class TeamAnalyticsService {
 
   private async getTeamTraces(teamId: string, timeRange: TimeRange): Promise<any[]> {
     try {
-      const traces = await opikClient.searchTraces({
-        projectName: OPIK_PROJECT_NAME,
+      // Mock search for now - replace with MCP call when available
+      const traces = [];
+        // projectName: 'codepik-ide',
         filters: {
           'metadata.teamId': teamId,
           'created_at': { 
@@ -215,8 +216,9 @@ export class TeamAnalyticsService {
 
   private async getMemberTraces(userId: string, teamId: string): Promise<any[]> {
     try {
-      const traces = await opikClient.searchTraces({
-        projectName: OPIK_PROJECT_NAME,
+      // Mock search for now - replace with MCP call when available
+      const traces = [];
+        // projectName: 'codepik-ide',
         filters: {
           'metadata.userId': userId,
           'metadata.teamId': teamId
