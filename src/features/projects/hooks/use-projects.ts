@@ -51,7 +51,7 @@ export const useRenameProject = () => {
         { id: args.id }
       );
 
-      if (existingProject !== undefined  && existingProject !== null) {
+      if (existingProject !== undefined && existingProject !== null) {
         localStore.setQuery(
           api.projects.getById,
           { id: args.id },
@@ -82,4 +82,8 @@ export const useRenameProject = () => {
 
 export const useUpdateProjectSettings = () => {
   return useMutation(api.projects.updateSettings);
+};
+
+export const useDeleteProject = () => {
+  return useMutation(api.projects.remove);
 };

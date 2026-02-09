@@ -1,10 +1,10 @@
 import ky from "ky";
 import { toast } from "sonner";
 import { useState } from "react";
-import { 
-  CopyIcon, 
-  HistoryIcon, 
-  LoaderIcon, 
+import {
+  CopyIcon,
+  HistoryIcon,
+  LoaderIcon,
   PlusIcon
 } from "lucide-react";
 
@@ -201,13 +201,13 @@ export const ConversationSidebar = ({
           <ConversationScrollButton />
         </Conversation>
         <div className="p-3">
-          <PromptInput 
+          <PromptInput
             onSubmit={handleSubmit}
             className="mt-2"
           >
             <PromptInputBody>
               <PromptInputTextarea
-                placeholder="Ask Polaris anything..."
+                placeholder="Ask Codepik anything..."
                 onChange={(e) => setInput(e.target.value)}
                 value={input}
                 disabled={isProcessing}

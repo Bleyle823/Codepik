@@ -255,7 +255,11 @@ function RealTimeStatsPanel({ stats }: { stats?: RealTimeStats }) {
   );
 }
 
-export function OpikAnalyticsDashboard() {
+export interface OpikAnalyticsDashboardProps {
+  projectId?: string;
+}
+
+export function OpikAnalyticsDashboard({ projectId }: OpikAnalyticsDashboardProps) {
   const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null);
   const [traceAnalytics, setTraceAnalytics] = useState<TraceAnalytics | null>(null);
   const [realTimeStats, setRealTimeStats] = useState<RealTimeStats | null>(null);
@@ -279,9 +283,9 @@ export function OpikAnalyticsDashboard() {
 
       // Load all dashboard data
       const [metrics, analytics, stats] = await Promise.all([
-        dashboardService.getDashboardMetrics(),
-        dashboardService.getTraceAnalytics(timeRange),
-        dashboardService.getRealTimeStats()
+        dashboardService.getDashboardMetrics(projectId),
+        dashboardService.getTraceAnalytics(timeRange, projectId),
+        dashboardService.getRealTimeStats(projectId)
       ]);
 
       setDashboardMetrics(metrics);
@@ -294,7 +298,7 @@ export function OpikAnalyticsDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [timeRange]);
+  }, [timeRange, projectId]);
 
   useEffect(() => {
     loadAnalytics();
@@ -315,7 +319,7 @@ export function OpikAnalyticsDashboard() {
     // Set up periodic refresh
     const refreshInterval = setInterval(() => {
       if (connectionStatus === 'connected') {
-        dashboardService.getRealTimeStats().then(setRealTimeStats);
+        dashboardService.getRealTimeStats(projectId).then(setRealTimeStats);
       }
     }, 30000); // Refresh every 30 seconds
 
@@ -366,7 +370,7 @@ export function OpikAnalyticsDashboard() {
           <h2 className="text-2xl font-bold">Opik Analytics Dashboard</h2>
           <div className="flex items-center gap-2 mt-1">
             <div className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' :
-                connectionStatus === 'disconnected' ? 'bg-red-500' : 'bg-yellow-500'
+              connectionStatus === 'disconnected' ? 'bg-red-500' : 'bg-yellow-500'
               }`} />
             <span className="text-sm text-muted-foreground">
               {connectionStatus === 'connected' ? 'Connected to Opik' :
@@ -445,21 +449,21 @@ export function OpikAnalyticsDashboard() {
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TraceTimelineChart analytics={traceAnalytics} />
-            <PerformanceDistributionChart analytics={traceAnalytics} />
+            <TraceTimelineChart analytics={traceAnalytics || undefined} />
+            <PerformanceDistributionChart analytics={traceAnalytics || undefined} />
           </div>
         </TabsContent>
 
         <TabsContent value="performance" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TraceTimelineChart analytics={traceAnalytics} />
-            <QualityMetricsChart metrics={dashboardMetrics} />
+            <TraceTimelineChart analytics={traceAnalytics || undefined} />
+            <QualityMetricsChart metrics={dashboardMetrics || undefined} />
           </div>
         </TabsContent>
 
         <TabsContent value="costs" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <CostAnalysisChart metrics={dashboardMetrics} />
+            <CostAnalysisChart metrics={dashboardMetrics || undefined} />
             <Card>
               <CardHeader>
                 <CardTitle>Cost Optimization Tips</CardTitle>
@@ -479,7 +483,7 @@ export function OpikAnalyticsDashboard() {
 
         <TabsContent value="quality" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <QualityMetricsChart metrics={dashboardMetrics} />
+            <QualityMetricsChart metrics={dashboardMetrics || undefined} />
             <Card>
               <CardHeader>
                 <CardTitle>Quality Insights</CardTitle>

@@ -1,13 +1,10 @@
 'use client';
 
-import { 
-  getCurrentProjectId, 
-  getCurrentUserId, 
-  getCurrentSessionId,
+import {
   checkOpikHealth,
-  OpikTrace,
-  OpikProject 
+  OpikTrace
 } from '@/lib/opik-client-safe';
+import { getTraceStatisticsAction } from '@/lib/opik-actions';
 
 export interface DashboardMetrics {
   totalTraces: number;
@@ -115,44 +112,87 @@ export class OpikDashboardService {
     }
   }
 
-  // Fetch dashboard metrics using Opik MCP
-  async getDashboardMetrics(): Promise<DashboardMetrics | null> {
-    const cacheKey = 'dashboard-metrics';
+  // Fetch dashboard metrics using our new API
+  async getDashboardMetrics(projectId?: string): Promise<DashboardMetrics | null> {
+    const cacheKey = `dashboard-metrics-${projectId || 'all'}`;
     const cached = this.getCachedData<DashboardMetrics>(cacheKey);
     if (cached) return cached;
 
     try {
-      // Use MCP to get real data
-      const [traceStats, projects] = await Promise.all([
-        this.getTraceStatistics(),
-        this.getProjectList()
-      ]);
+      // Fetch stats from our new API endpoint
+      const url = new URL('/api/opik/traces/stats', window.location.origin);
+      if (projectId) url.searchParams.append('projectId', projectId);
 
-      const metrics: DashboardMetrics = {
-        totalTraces: traceStats?.totalCount || 0,
-        traceGrowth: traceStats?.growthRate || 0,
-        avgResponseTime: traceStats?.avgDuration || 0,
-        responseTimeChange: traceStats?.durationChange || 0,
-        totalCost: traceStats?.totalCost || 0,
-        costChange: traceStats?.costChange || 0,
-        successRate: traceStats?.successRate || 0,
-        successRateChange: traceStats?.successRateChange || 0,
-        qualityMetrics: {
-          avgQuality: traceStats?.avgQuality || 0.85,
-          qualityTrend: traceStats?.qualityTrend || 2.1
-        },
-        costBreakdown: traceStats?.costBreakdown || [
-          { name: 'Editor Operations', value: 15.20, color: '#3b82f6' },
-          { name: 'AI Suggestions', value: 8.90, color: '#10b981' },
-          { name: 'Code Analysis', value: 4.30, color: '#f59e0b' },
-          { name: 'Chat Interactions', value: 6.80, color: '#ef4444' }
-        ]
-      };
+      const response = await fetch(url.toString());
+      const statsResponse = await response.json();
 
-      this.setCachedData(cacheKey, metrics);
-      this.emit('metrics-updated', metrics);
-      
-      return metrics;
+      if (response.ok && statsResponse && statsResponse.stats) {
+        // Transform the API response (TraceStatsResponse) to DashboardMetrics
+        const statsArray = statsResponse.stats; // Array of daily/bucketed stats
+
+        // Aggregate the stats
+        const totalTraces = statsArray.reduce((acc: number, curr: any) => acc + (curr.trace_count || 0), 0);
+        const totalCost = statsArray.reduce((acc: number, curr: any) => acc + (curr.cost || 0), 0);
+        // Average duration is a bit harder if we only have counts and not totals, but assuming we might get it or approximate it
+        // If stats contains total_duration we could divide, otherwise we leave it 0 or mock
+        // Looking at types, we have completion_tokens, prompt_tokens, etc.
+
+        // Let's assume we can calculate a rough average if we had total_duration, but we don't in the type def.
+        const avgResponseTime = 0;
+
+        // Success rate: API stats don't explicitly have "error_count", so we might default to 100% or need a different endpoint
+        const successRate = 100;
+
+        const metrics: DashboardMetrics = {
+          totalTraces,
+          traceGrowth: 0,
+          avgResponseTime,
+          responseTimeChange: 0,
+          totalCost,
+          costChange: 0,
+          successRate,
+          successRateChange: 0,
+          qualityMetrics: {
+            avgQuality: 0, // Not in stats API
+            qualityTrend: 0
+          },
+          costBreakdown: [
+            // Rough breakdown based on token usage if available
+            { name: 'Prompt Tokens', value: statsArray.reduce((acc: number, curr: any) => acc + (curr.prompt_tokens || 0), 0), color: '#3b82f6' },
+            { name: 'Completion Tokens', value: statsArray.reduce((acc: number, curr: any) => acc + (curr.completion_tokens || 0), 0), color: '#10b981' }
+          ]
+        };
+
+        this.setCachedData(cacheKey, metrics);
+        this.emit('metrics-updated', metrics);
+        return metrics;
+      }
+
+      // If API fails or returns empty, try the fallback/server action
+      const realStats = await getTraceStatisticsAction(); // Action might need update too if we want server-side filtering there
+      if (realStats) {
+        // cast because realStats has extra properties but satisfies most
+        const metrics: DashboardMetrics = {
+          totalTraces: realStats.totalCount,
+          traceGrowth: realStats.growthRate,
+          avgResponseTime: realStats.avgDuration,
+          responseTimeChange: realStats.durationChange,
+          totalCost: realStats.totalCost,
+          costChange: realStats.costChange,
+          successRate: realStats.successRate,
+          successRateChange: realStats.successRateChange,
+          qualityMetrics: {
+            avgQuality: realStats.avgQuality,
+            qualityTrend: realStats.qualityTrend
+          },
+          costBreakdown: realStats.costBreakdown
+        };
+        this.setCachedData(cacheKey, metrics);
+        return metrics;
+      }
+
+      return this.getFallbackMetrics();
+
     } catch (error) {
       console.error('Failed to fetch dashboard metrics:', error);
       return this.getFallbackMetrics();
@@ -160,18 +200,18 @@ export class OpikDashboardService {
   }
 
   // Get trace analytics
-  async getTraceAnalytics(timeRange: '1h' | '24h' | '7d' | '30d' = '24h'): Promise<TraceAnalytics | null> {
-    const cacheKey = `trace-analytics-${timeRange}`;
+  async getTraceAnalytics(timeRange: '1h' | '24h' | '7d' | '30d' = '24h', projectId?: string): Promise<TraceAnalytics | null> {
+    const cacheKey = `trace-analytics-${timeRange}-${projectId || 'all'}`;
     const cached = this.getCachedData<TraceAnalytics>(cacheKey);
     if (cached) return cached;
 
     try {
-      const traces = await this.fetchTraces(timeRange);
+      const traces = await this.fetchTraces(timeRange, projectId);
       const analytics = this.processTraceAnalytics(traces);
-      
+
       this.setCachedData(cacheKey, analytics);
       this.emit('analytics-updated', analytics);
-      
+
       return analytics;
     } catch (error) {
       console.error('Failed to fetch trace analytics:', error);
@@ -180,9 +220,10 @@ export class OpikDashboardService {
   }
 
   // Get real-time statistics
-  async getRealTimeStats(): Promise<RealTimeStats | null> {
+  async getRealTimeStats(projectId?: string): Promise<RealTimeStats | null> {
     try {
-      // This would typically come from a real-time API or WebSocket
+      // For real-time, we can query the traces endpoint for very recent traces
+      // or keep using mocked/simulated data until Opik supports stream/socket
       const stats: RealTimeStats = {
         activeUsers: await this.getActiveUserCount(),
         currentSessions: await this.getCurrentSessionCount(),
@@ -201,67 +242,21 @@ export class OpikDashboardService {
   }
 
   // Private helper methods
-  private async getTraceStatistics() {
-    try {
-      // This would use the Opik MCP to get real statistics
-      // For now, we'll simulate with enhanced mock data
-      return {
-        totalCount: Math.floor(Math.random() * 2000) + 1000,
-        growthRate: (Math.random() - 0.5) * 30,
-        avgDuration: Math.floor(Math.random() * 500) + 200,
-        durationChange: (Math.random() - 0.5) * 20,
-        totalCost: Math.random() * 50 + 10,
-        costChange: (Math.random() - 0.5) * 25,
-        successRate: Math.random() * 20 + 80,
-        successRateChange: (Math.random() - 0.5) * 10,
-        avgQuality: Math.random() * 0.3 + 0.7,
-        qualityTrend: (Math.random() - 0.5) * 10,
-        costBreakdown: [
-          { name: 'Editor Operations', value: Math.random() * 20 + 10, color: '#3b82f6' },
-          { name: 'AI Suggestions', value: Math.random() * 15 + 5, color: '#10b981' },
-          { name: 'Code Analysis', value: Math.random() * 10 + 2, color: '#f59e0b' },
-          { name: 'Chat Interactions', value: Math.random() * 12 + 3, color: '#ef4444' }
-        ]
-      };
-    } catch (error) {
-      console.error('Error getting trace statistics:', error);
-      return null;
-    }
-  }
 
-  private async getProjectList() {
+  private async fetchTraces(timeRange: string, projectId?: string) {
     try {
-      // This would use the Opik MCP list-projects tool
-      return [];
-    } catch (error) {
-      console.error('Error getting project list:', error);
-      return [];
-    }
-  }
+      // Fetch traces from our new API
+      const url = new URL('/api/opik/traces', window.location.origin);
+      url.searchParams.append('size', '100');
+      if (projectId) url.searchParams.append('projectId', projectId);
 
-  private async fetchTraces(timeRange: string) {
-    try {
-      // This would use the Opik MCP list-traces tool
-      // Generate mock traces for now
-      const traceCount = timeRange === '1h' ? 50 : timeRange === '24h' ? 200 : 1000;
-      const traces = [];
-      
-      for (let i = 0; i < traceCount; i++) {
-        const date = new Date();
-        date.setHours(date.getHours() - Math.random() * (timeRange === '1h' ? 1 : timeRange === '24h' ? 24 : 168));
-        
-        traces.push({
-          id: `trace_${i}`,
-          name: ['editor-session', 'ai-suggestion', 'code-analysis', 'chat-interaction'][Math.floor(Math.random() * 4)],
-          created_at: date.toISOString(),
-          duration: Math.floor(Math.random() * 2000) + 100,
-          status: Math.random() > 0.1 ? 'success' : 'error',
-          cost: Math.random() * 0.1,
-          quality_score: Math.random() * 0.4 + 0.6
-        });
+      const response = await fetch(url.toString());
+      const data = await response.json();
+
+      if (response.ok && data && data.content) {
+        return data.content;
       }
-      
-      return traces;
+      return [];
     } catch (error) {
       console.error('Error fetching traces:', error);
       return [];
@@ -271,7 +266,7 @@ export class OpikDashboardService {
   private processTraceAnalytics(traces: any[]): TraceAnalytics {
     // Process traces into timeline data
     const timelineMap = new Map();
-    
+
     traces.forEach(trace => {
       const date = new Date(trace.created_at).toLocaleDateString();
       const existing = timelineMap.get(date) || {
@@ -281,14 +276,15 @@ export class OpikDashboardService {
         successCount: 0,
         totalCount: 0
       };
-      
+
       existing.interactions += 1;
       existing.totalDuration += trace.duration || 0;
       existing.totalCount += 1;
-      if (trace.status === 'success') {
+      // Assume success if no error_info or tags don't contain error
+      if (!trace.error_info && (!trace.tags || !trace.tags.includes('error'))) {
         existing.successCount += 1;
       }
-      
+
       timelineMap.set(date, existing);
     });
 
@@ -302,8 +298,8 @@ export class OpikDashboardService {
     // Process performance data
     const performanceData = [
       { name: 'Response Time', value: traces.length > 0 ? traces.reduce((sum, t) => sum + (t.duration || 0), 0) / traces.length : 0, color: '#3b82f6' },
-      { name: 'Success Rate', value: traces.length > 0 ? (traces.filter(t => t.status === 'success').length / traces.length) * 100 : 0, color: '#10b981' },
-      { name: 'Quality Score', value: traces.length > 0 ? (traces.reduce((sum, t) => sum + (t.quality_score || 0), 0) / traces.length) * 100 : 0, color: '#f59e0b' }
+      { name: 'Success Rate', value: traces.length > 0 ? (traces.filter(t => !t.error_info).length / traces.length) * 100 : 0, color: '#10b981' },
+      { name: 'Quality Score', value: traces.length > 0 ? (traces.reduce((sum, t) => sum + (t.feedback_scores?.[0]?.value || 0.8), 0) / traces.length) * 100 : 0, color: '#f59e0b' }
     ];
 
     return {
@@ -314,31 +310,27 @@ export class OpikDashboardService {
   }
 
   private async getActiveUserCount(): Promise<number> {
-    // This would query active sessions from Opik
-    return Math.floor(Math.random() * 20) + 5;
+    return Math.floor(Math.random() * 20) + 5; // Placeholder
   }
 
   private async getCurrentSessionCount(): Promise<number> {
-    // This would query current active sessions
-    return Math.floor(Math.random() * 50) + 10;
+    return Math.floor(Math.random() * 50) + 10; // Placeholder
   }
 
   private async getTracesPerMinute(): Promise<number> {
-    // This would calculate traces per minute from recent data
-    return Math.floor(Math.random() * 100) + 20;
+    return Math.floor(Math.random() * 100) + 20; // Placeholder
   }
 
   private async getAverageLatency(): Promise<number> {
-    // This would calculate average latency from recent traces
-    return Math.floor(Math.random() * 300) + 100;
+    return Math.floor(Math.random() * 300) + 100; // Placeholder
   }
 
   private async getErrorRate(): Promise<number> {
-    // This would calculate error rate from recent traces
-    return Math.random() * 5 + 1;
+    return Math.random() * 5 + 1; // Placeholder
   }
 
   private async getTopFeatures(): Promise<Array<{ feature: string; usage: number; trend: number }>> {
+    // Could eventually come from aggregating trace tags
     return [
       { feature: 'AI Suggestions', usage: Math.floor(Math.random() * 1000) + 500, trend: (Math.random() - 0.5) * 20 },
       { feature: 'Code Analysis', usage: Math.floor(Math.random() * 800) + 300, trend: (Math.random() - 0.5) * 15 },
@@ -349,48 +341,27 @@ export class OpikDashboardService {
 
   private getFallbackMetrics(): DashboardMetrics {
     return {
-      totalTraces: 1247,
-      traceGrowth: 15.3,
-      avgResponseTime: 385,
-      responseTimeChange: -8.2,
-      totalCost: 24.67,
-      costChange: 12.1,
-      successRate: 94.2,
-      successRateChange: 2.1,
+      totalTraces: 0,
+      traceGrowth: 0,
+      avgResponseTime: 0,
+      responseTimeChange: 0,
+      totalCost: 0,
+      costChange: 0,
+      successRate: 0,
+      successRateChange: 0,
       qualityMetrics: {
-        avgQuality: 0.87,
-        qualityTrend: 5.3
+        avgQuality: 0,
+        qualityTrend: 0
       },
-      costBreakdown: [
-        { name: 'Editor Operations', value: 15.20, color: '#3b82f6' },
-        { name: 'AI Suggestions', value: 8.90, color: '#10b981' },
-        { name: 'Code Analysis', value: 4.30, color: '#f59e0b' },
-        { name: 'Chat Interactions', value: 6.80, color: '#ef4444' }
-      ]
+      costBreakdown: []
     };
   }
 
   private getFallbackAnalytics(): TraceAnalytics {
-    const mockTraces = Array.from({ length: 50 }, (_, i) => ({
-      id: `trace_${i}`,
-      name: 'editor-session',
-      created_at: new Date(Date.now() - Math.random() * 86400000).toISOString(),
-      duration: Math.floor(Math.random() * 1000) + 200
-    }));
-
     return {
-      traces: mockTraces as OpikTrace[],
-      timelineData: [
-        { date: '2026-01-28', interactions: 45, avgResponseTime: 320, successRate: 95 },
-        { date: '2026-01-29', interactions: 52, avgResponseTime: 290, successRate: 97 },
-        { date: '2026-01-30', interactions: 38, avgResponseTime: 410, successRate: 92 },
-        { date: '2026-01-31', interactions: 61, avgResponseTime: 350, successRate: 96 }
-      ],
-      performanceData: [
-        { name: 'Response Time', value: 85, color: '#3b82f6' },
-        { name: 'Success Rate', value: 94, color: '#10b981' },
-        { name: 'Quality Score', value: 87, color: '#f59e0b' }
-      ]
+      traces: [],
+      timelineData: [],
+      performanceData: []
     };
   }
 

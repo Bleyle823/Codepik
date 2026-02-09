@@ -5,11 +5,12 @@ import { css } from "@codemirror/lang-css";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { python } from "@codemirror/lang-python";
+import { solidity } from "@replit/codemirror-lang-solidity";
 
 export const getLanguageExtension = (filename: string): Extension => {
   const ext = filename.split(".").pop()?.toLowerCase();
 
-  switch(ext) {
+  switch (ext) {
     case "js":
       return javascript();
     case "jsx":
@@ -29,6 +30,8 @@ export const getLanguageExtension = (filename: string): Extension => {
       return markdown();
     case "py":
       return python();
+    case "sol":
+      return solidity;
     default:
       return [];
   }

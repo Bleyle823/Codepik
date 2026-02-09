@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
+import {
   X,
   BarChart3,
   Activity,
@@ -22,13 +22,13 @@ import {
   Maximize2,
   Minimize2
 } from 'lucide-react';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   AreaChart,
   Area,
@@ -45,6 +45,7 @@ interface OpikAnalyticsOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   className?: string;
+  projectId?: string;
 }
 
 interface OverlayMetrics {
@@ -58,7 +59,7 @@ interface OverlayMetrics {
   aiEfficiency: number;
 }
 
-export function OpikAnalyticsOverlay({ isOpen, onClose, className }: OpikAnalyticsOverlayProps) {
+export function OpikAnalyticsOverlay({ isOpen, onClose, className, projectId }: OpikAnalyticsOverlayProps) {
   const [metrics, setMetrics] = useState<OverlayMetrics>({
     totalTraces: 0,
     avgResponseTime: 0,
@@ -81,15 +82,15 @@ export function OpikAnalyticsOverlay({ isOpen, onClose, className }: OpikAnalyti
       const interval = setInterval(loadAnalyticsData, 30000); // Update every 30 seconds
       return () => clearInterval(interval);
     }
-  }, [isOpen]);
+  }, [isOpen, projectId]);
 
   const loadAnalyticsData = async () => {
     setIsLoading(true);
     try {
       const [dashboardMetrics, traceAnalytics, realTimeStats] = await Promise.all([
-        dashboardService.getDashboardMetrics(),
-        dashboardService.getTraceAnalytics('24h'),
-        dashboardService.getRealTimeStats()
+        dashboardService.getDashboardMetrics(projectId),
+        dashboardService.getTraceAnalytics('24h', projectId),
+        dashboardService.getRealTimeStats(projectId)
       ]);
 
       // Use lightweight metrics for overlay to avoid heavy imports
@@ -291,11 +292,11 @@ export function OpikAnalyticsOverlay({ isOpen, onClose, className }: OpikAnalyti
                           <XAxis dataKey="date" />
                           <YAxis />
                           <Tooltip />
-                          <Area 
-                            type="monotone" 
-                            dataKey="interactions" 
-                            stroke="#3b82f6" 
-                            fill="#3b82f6" 
+                          <Area
+                            type="monotone"
+                            dataKey="interactions"
+                            stroke="#3b82f6"
+                            fill="#3b82f6"
                             fillOpacity={0.3}
                           />
                         </AreaChart>
@@ -347,21 +348,21 @@ export function OpikAnalyticsOverlay({ isOpen, onClose, className }: OpikAnalyti
                             <span>{metrics.aiEfficiency.toFixed(0)}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-blue-600 h-2 rounded-full" 
+                            <div
+                              className="bg-blue-600 h-2 rounded-full"
                               style={{ width: `${metrics.aiEfficiency}%` }}
                             />
                           </div>
                         </div>
-                        
+
                         <div>
                           <div className="flex justify-between text-sm mb-2">
                             <span>Productivity Score</span>
                             <span>{metrics.productivityScore.toFixed(0)}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-green-600 h-2 rounded-full" 
+                            <div
+                              className="bg-green-600 h-2 rounded-full"
                               style={{ width: `${metrics.productivityScore}%` }}
                             />
                           </div>
@@ -373,8 +374,8 @@ export function OpikAnalyticsOverlay({ isOpen, onClose, className }: OpikAnalyti
                             <span>{metrics.successRate.toFixed(1)}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-purple-600 h-2 rounded-full" 
+                            <div
+                              className="bg-purple-600 h-2 rounded-full"
                               style={{ width: `${metrics.successRate}%` }}
                             />
                           </div>

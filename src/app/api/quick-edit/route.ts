@@ -2,10 +2,15 @@ import { z } from "zod";
 import { generateText, Output } from "ai";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { openai } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
 
 import { firecrawl } from "@/lib/firecrawl";
 import { QuickEditTracer } from "@/features/editor/services/opik-quick-edit-tracer";
+
+const openrouter = createOpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
 
 const quickEditSchema = z.object({
   editedCode: z
@@ -44,7 +49,7 @@ If the instruction is unclear or cannot be applied, return the original code unc
 export async function POST(request: Request) {
   const startTime = Date.now();
   let tracer: any = null;
-  
+
   try {
     const { userId } = await auth();
     const { selectedCode, fullCode, instruction, fileName } = await request.json();
@@ -89,7 +94,7 @@ export async function POST(request: Request) {
     if (urls.length > 0) {
       // Track documentation processing
       const docSpan = tracer.trackDocumentationProcessing(urls);
-      
+
       const scrapedResults = await Promise.all(
         urls.map(async (url) => {
           try {
@@ -113,9 +118,9 @@ export async function POST(request: Request) {
       if (validResults.length > 0) {
         documentationContext = `<documentation>\n${validResults.join("\n\n")}\n</documentation>`;
       }
-      
-      docSpan.update({ 
-        output: { 
+
+      docSpan.update({
+        output: {
           urlsProcessed: urls.length,
           validResults: validResults.length,
           documentationGenerated: documentationContext.length > 0
@@ -125,8 +130,8 @@ export async function POST(request: Request) {
 
     // Track code analysis
     const analysisSpan = tracer.trackCodeAnalysis('quick-edit');
-    analysisSpan.update({ 
-      output: { 
+    analysisSpan.update({
+      output: {
         hasFullContext: !!fullCode,
         hasDocumentation: documentationContext.length > 0
       }
@@ -141,14 +146,23 @@ export async function POST(request: Request) {
     // Track AI processing
     const aiSpan = tracer.trackAIProcessing("gpt-4o-mini", prompt);
 
+    console.log("Quick Edit Request: Starting generation with OpenRouter");
+    if (!process.env.OPENROUTER_API_KEY) {
+      console.error("Quick Edit Error: OPENROUTER_API_KEY is missing");
+      return NextResponse.json(
+        { error: "Server configuration error" },
+        { status: 500 }
+      );
+    }
+
     const { output } = await generateText({
-      model: openai("gpt-4o-mini"),
+      model: openrouter("google/gemini-2.0-flash-001"),
       output: Output.object({ schema: quickEditSchema }),
       prompt,
     });
 
-    aiSpan.update({ 
-      output: { 
+    aiSpan.update({
+      output: {
         editGenerated: true,
         editLength: output.editedCode.length
       }
@@ -162,17 +176,17 @@ export async function POST(request: Request) {
       urlsProcessed: urls.length
     });
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       editedCode: output.editedCode,
       traceId // Include trace ID for frontend feedback
     });
   } catch (error) {
     console.error("Edit error:", error);
-    
+
     if (tracer) {
       tracer.complete(null, error as Error);
     }
-    
+
     return NextResponse.json(
       { error: "Failed to generate edit" },
       { status: 500 }

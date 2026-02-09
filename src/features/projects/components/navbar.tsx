@@ -88,7 +88,7 @@ export const Navbar = ({
                         "text-sm font-medium font-poppins",
                       )}
                     >
-                      Polaris
+                      Codepik
                     </span>
                   </Link>
                 </Button>
@@ -132,7 +132,7 @@ export const Navbar = ({
             </TooltipTrigger>
             <TooltipContent>
               Saved{" "}
-              {project?.updatedAt 
+              {project?.updatedAt
                 ? formatDistanceToNow(
                   project.updatedAt,
                   { addSuffix: true, }

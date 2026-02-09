@@ -28,6 +28,7 @@ export interface OpikTrace {
   start_time?: string;
   end_time?: string;
   duration?: number;
+  created_at?: string;
 }
 
 export interface OpikSpan {

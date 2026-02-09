@@ -51,8 +51,20 @@ export default defineSchema({
     role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
     content: v.string(),
     status: v.optional(v.union(v.literal("pending"), v.literal("processing"), v.literal("completed"), v.literal("failed"), v.literal("cancelled"))),
+    traceId: v.optional(v.string()),
     updatedAt: v.number(),
   })
     .index("by_conversation", ["conversationId"])
     .index("by_project_status", ["projectId", "status"]),
+
+  uploads: defineTable({
+    projectId: v.id("projects"),
+    status: v.union(v.literal("pending"), v.literal("processing"), v.literal("completed"), v.literal("failed")),
+    progress: v.number(),
+    message: v.optional(v.string()),
+    totalFiles: v.optional(v.number()),
+    processedFiles: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_project", ["projectId"]),
 });

@@ -1,7 +1,6 @@
-'use client';
 
-import { 
-  getCurrentUserId, 
+import {
+  getCurrentUserId,
   getCurrentSessionId,
   OpikTrace,
   OpikSpan,
@@ -50,8 +49,21 @@ export class OpikAITracer {
   async startTrace(context: AIOperationContext): Promise<string | null> {
     try {
       const traceId = `ai_${context.operationType}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const userId = getCurrentUserId() || context.userId || 'anonymous';
-      const sessionId = getCurrentSessionId();
+
+      // Safe for both client and server
+      let userId = context.userId || 'anonymous';
+      let sessionId = context.sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Only call client-side functions if we're in the browser
+      if (typeof window !== 'undefined') {
+        try {
+          userId = getCurrentUserId() || userId;
+          sessionId = getCurrentSessionId() || sessionId;
+        } catch (e) {
+          // Ignore errors from client-side functions
+        }
+      }
+
 
       const trace = await safeOpikClient.createTrace({
         name: `ai-${context.operationType}`,
@@ -117,7 +129,7 @@ export class OpikAITracer {
       const opikTraceId = traceMetadata.traceId;
 
       // Create completion span
-      await createSpan({
+      await safeOpikClient.createSpan({
         traceId: opikTraceId,
         name: `${traceMetadata.context.operationType}-completion`,
         type: 'llm',
@@ -155,7 +167,7 @@ export class OpikAITracer {
 
       // Clean up
       this.activeTraces.delete(traceId);
-      
+
       console.log(`AI operation trace completed: ${traceMetadata.context.operationType} (${duration}ms)`);
     } catch (error) {
       console.error('Failed to end AI trace:', error);
@@ -214,7 +226,7 @@ export class OpikAITracer {
         name: feedback.name,
         value: feedback.value,
         reason: feedback.reason,
-        userId: getCurrentUserId()
+        userId: typeof window !== 'undefined' ? getCurrentUserId() : undefined
       });
     } catch (error) {
       console.error('Failed to add feedback:', error);
@@ -434,7 +446,7 @@ export class QuickEditTracer extends OpikAITracer {
     return this.addSpan(traceId, {
       name: 'edit-generation',
       type: 'llm',
-      input: { 
+      input: {
         originalCode: edit.originalCode,
         originalLength: edit.originalCode.length
       },
@@ -464,7 +476,7 @@ export class QuickEditTracer extends OpikAITracer {
       name: 'edit-application',
       type: 'general',
       input: { appliedCode: applied.appliedCode },
-      output: { 
+      output: {
         success: applied.success,
         userModifications: applied.userModifications,
         finalCode: applied.appliedCode

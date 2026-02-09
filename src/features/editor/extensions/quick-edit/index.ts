@@ -2,6 +2,7 @@ import { Tooltip, showTooltip, keymap, EditorView } from "@codemirror/view";
 import { StateField, EditorState, StateEffect } from "@codemirror/state";
 
 import { fetcher } from "./fetcher";
+import { quickEditTracer } from "@/features/ai/services/opik-ai-tracer";
 
 export const showQuickEditEffect = StateEffect.define<boolean>();
 
@@ -106,26 +107,77 @@ const createQuickEditTooltip = (state: EditorState): readonly Tooltip[] => {
           submitButton.textContent = "Editing...";
 
           currentAbortController = new AbortController();
-          const editedCode = await fetcher(
-            {
-              selectedCode,
-              fullCode,
-              instruction,
-            },
-            currentAbortController.signal
-          );
 
-          if (editedCode) {
-            editorView.dispatch({
-              changes: {
-                from: selection.from,
-                to: selection.to,
-                insert: editedCode,
+          const startTime = Date.now();
+          const traceId = await quickEditTracer.startQuickEditTrace({
+            model: "unknown",
+            editInstruction: instruction,
+            codeSelection: selectedCode,
+            editType: 'refactor', // Infer or default
+            fileName: 'unknown' // Not passed to tooltip creation yet, TODO: fix
+          });
+
+          try {
+            const editedCode = await fetcher(
+              {
+                selectedCode,
+                fullCode,
+                instruction,
               },
-              selection: { anchor: selection.from + editedCode.length },
-              effects: showQuickEditEffect.of(false),
-            });
-          } else {
+              currentAbortController.signal
+            );
+
+            if (traceId && editedCode) {
+              await quickEditTracer.addEditGenerated(traceId, {
+                originalCode: selectedCode,
+                editedCode: editedCode,
+                confidence: 1.0,
+                processingTime: Date.now() - startTime
+              });
+            }
+
+            if (editedCode) {
+              // Apply edit
+              const applyStartTime = Date.now();
+              editorView.dispatch({
+                changes: {
+                  from: selection.from,
+                  to: selection.to,
+                  insert: editedCode,
+                },
+                selection: { anchor: selection.from + editedCode.length },
+                effects: showQuickEditEffect.of(false),
+              });
+
+              if (traceId) {
+                await quickEditTracer.addEditApplied(traceId, {
+                  success: true,
+                  appliedCode: editedCode,
+                  applicationTime: Date.now() - applyStartTime
+                });
+                await quickEditTracer.endTrace(traceId, {
+                  success: true,
+                  output: editedCode
+                });
+              }
+
+            } else {
+              submitButton.disabled = false;
+              submitButton.textContent = "Submit";
+              if (traceId) {
+                await quickEditTracer.endTrace(traceId, {
+                  success: false,
+                  error: 'No code returned'
+                });
+              }
+            }
+          } catch (error) {
+            if (traceId) {
+              await quickEditTracer.endTrace(traceId, {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown'
+              });
+            }
             submitButton.disabled = false;
             submitButton.textContent = "Submit";
           }

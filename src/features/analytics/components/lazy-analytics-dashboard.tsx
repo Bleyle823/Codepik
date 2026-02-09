@@ -5,9 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { BarChart3 } from 'lucide-react';
 
 // Lazy load the heavy analytics dashboard
-const OpikAnalyticsDashboard = lazy(() => 
-  import('./opik-dashboard').then(module => ({ 
-    default: module.OpikAnalyticsDashboard 
+const OpikAnalyticsDashboard = lazy(() =>
+  import('./opik-dashboard').then(module => ({
+    default: module.OpikAnalyticsDashboard
   }))
 );
 
@@ -46,10 +46,10 @@ function AnalyticsLoading() {
 }
 
 // Lazy wrapper component
-export function LazyAnalyticsDashboard() {
+export function LazyAnalyticsDashboard({ projectId }: { projectId?: string }) {
   return (
     <Suspense fallback={<AnalyticsLoading />}>
-      <OpikAnalyticsDashboard />
+      <OpikAnalyticsDashboard projectId={projectId} />
     </Suspense>
   );
 }

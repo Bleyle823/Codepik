@@ -1,16 +1,18 @@
 import ky from "ky";
 import { toast } from "sonner";
 import { useState } from "react";
-import { 
-  CopyIcon, 
-  HistoryIcon, 
-  LoaderIcon, 
+import {
+  CopyIcon,
+  HistoryIcon,
+  LoaderIcon,
   PlusIcon,
   Settings,
   Code,
   Zap,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  ThumbsUp,
+  ThumbsDown
 } from "lucide-react";
 
 import {
@@ -38,7 +40,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
-import { 
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -94,6 +96,8 @@ export const EnhancedConversationSidebar = ({
     canCancel: false
   });
 
+  const [feedback, setFeedback] = useState<Record<string, 'helpful' | 'not_helpful'>>({});
+
   const createConversation = useCreateConversation();
   const conversations = useConversations(projectId);
 
@@ -113,7 +117,7 @@ export const EnhancedConversationSidebar = ({
       await ky.post("/api/messages/cancel", {
         json: { projectId },
       });
-      
+
       // Reset AI editing state
       setAIEditingState({
         isEditing: false,
@@ -139,6 +143,33 @@ export const EnhancedConversationSidebar = ({
     }
   };
 
+  const handleFeedback = async (messageId: string, traceId: string | undefined, type: 'helpful' | 'not_helpful') => {
+    if (!traceId) {
+      toast.error("Unable to submit feedback: Trace ID missing");
+      return;
+    }
+
+    try {
+      const score = type === 'helpful' ? 1 : 0;
+      await ky.post("/api/feedback/opik", {
+        json: {
+          traceId,
+          score,
+          reason: type
+        },
+      });
+
+      setFeedback(prev => ({
+        ...prev,
+        [messageId]: type
+      }));
+
+      toast.success("Feedback submitted");
+    } catch {
+      toast.error("Failed to submit feedback");
+    }
+  };
+
   const handleSubmit = async (message: PromptInputMessage) => {
     // If processing and no new message, this is just a stop function
     if (isProcessing && !message.text) {
@@ -157,12 +188,12 @@ export const EnhancedConversationSidebar = ({
     }
 
     // Set AI editing state when starting a request that might modify files
-    const isCodeRequest = message.text.toLowerCase().includes('file') || 
-                         message.text.toLowerCase().includes('code') ||
-                         message.text.toLowerCase().includes('create') ||
-                         message.text.toLowerCase().includes('update') ||
-                         message.text.toLowerCase().includes('fix') ||
-                         message.text.toLowerCase().includes('add');
+    const isCodeRequest = message.text.toLowerCase().includes('file') ||
+      message.text.toLowerCase().includes('code') ||
+      message.text.toLowerCase().includes('create') ||
+      message.text.toLowerCase().includes('update') ||
+      message.text.toLowerCase().includes('fix') ||
+      message.text.toLowerCase().includes('add');
 
     if (isCodeRequest) {
       setAIEditingState({
@@ -206,7 +237,7 @@ export const EnhancedConversationSidebar = ({
           progress: 75
         },
         {
-          id: "file2", 
+          id: "file2",
           name: "styles/button.css",
           currentOperation: "Updating styles",
           progress: 45
@@ -268,8 +299,8 @@ export const EnhancedConversationSidebar = ({
                     </span>
                   </div>
                   {aiEditingState.canCancel && (
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       variant="outline"
                       onClick={handleCancel}
                       className="h-6 text-xs"
@@ -278,7 +309,7 @@ export const EnhancedConversationSidebar = ({
                     </Button>
                   )}
                 </div>
-                
+
                 {aiEditingState.currentOperation && (
                   <p className="text-xs text-muted-foreground mb-2">
                     {aiEditingState.currentOperation}
@@ -351,6 +382,22 @@ export const EnhancedConversationSidebar = ({
                       >
                         <CopyIcon className="size-3" />
                       </MessageAction>
+                      {/* Feedback Buttons */}
+                      <div className="w-px h-3 bg-border mx-1" />
+                      <MessageAction
+                        onClick={() => handleFeedback(message._id, (message as any).traceId, 'helpful')}
+                        label="Helpful"
+                        className={feedback[message._id] === 'helpful' ? "text-green-600" : ""}
+                      >
+                        <ThumbsUp className="size-3" />
+                      </MessageAction>
+                      <MessageAction
+                        onClick={() => handleFeedback(message._id, (message as any).traceId, 'not_helpful')}
+                        label="Not Helpful"
+                        className={feedback[message._id] === 'not_helpful' ? "text-red-600" : ""}
+                      >
+                        <ThumbsDown className="size-3" />
+                      </MessageAction>
                     </MessageActions>
                   )
                 }
@@ -376,13 +423,13 @@ export const EnhancedConversationSidebar = ({
                 Test
               </Button>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-2">
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="auto-apply" 
+                <Checkbox
+                  id="auto-apply"
                   checked={autoApplyEdits}
-                  onCheckedChange={setAutoApplyEdits}
+                  onCheckedChange={(checked) => setAutoApplyEdits(checked === true)}
                 />
                 <label htmlFor="auto-apply" className="text-xs">
                   Auto-apply changes
@@ -396,12 +443,12 @@ export const EnhancedConversationSidebar = ({
                   </TooltipContent>
                 </Tooltip>
               </div>
-              
+
               <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="show-preview" 
+                <Checkbox
+                  id="show-preview"
                   checked={showEditPreview}
-                  onCheckedChange={setShowEditPreview}
+                  onCheckedChange={(checked) => setShowEditPreview(checked === true)}
                 />
                 <label htmlFor="show-preview" className="text-xs">
                   Show previews
@@ -441,15 +488,15 @@ export const EnhancedConversationSidebar = ({
           </div>
 
           {/* Main Prompt Input */}
-          <PromptInput 
+          <PromptInput
             onSubmit={handleSubmit}
           >
             <PromptInputBody>
               <PromptInputTextarea
                 placeholder={
-                  autoApplyEdits 
-                    ? "Ask me to create, edit, or fix your code..." 
-                    : "Ask Polaris anything..."
+                  autoApplyEdits
+                    ? "Ask me to create, edit, or fix your code..."
+                    : "Ask Codepik anything..."
                 }
                 onChange={(e) => setInput(e.target.value)}
                 value={input}

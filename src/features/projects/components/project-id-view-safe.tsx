@@ -13,32 +13,32 @@ import { PreviewView } from "./preview-view";
 import { ExportPopover } from "./export-popover";
 
 // Lazy load EditorView to avoid Opik import issues on server
-const EditorView = lazy(() => 
+const EditorView = lazy(() =>
   import("@/features/editor/components/editor-view").then(m => ({
     default: m.EditorView
   }))
 );
 
 // Lazy load all Opik components to avoid server-side import issues
-const OpikStatusIndicator = lazy(() => 
+const OpikStatusIndicator = lazy(() =>
   import("@/features/editor/components/opik-status-indicator").then(m => ({
     default: m.OpikStatusIndicator
   }))
 );
 
-const LazyAnalyticsDashboard = lazy(() => 
+const LazyAnalyticsDashboard = lazy(() =>
   import("@/features/analytics/components/lazy-analytics-dashboard").then(m => ({
     default: m.LazyAnalyticsDashboard
   }))
 );
 
-const LightweightAnalyticsSidebar = lazy(() => 
+const LightweightAnalyticsSidebar = lazy(() =>
   import("@/features/analytics/components/lightweight-analytics-sidebar").then(m => ({
     default: m.LightweightAnalyticsSidebar
   }))
 );
 
-const OpikAnalyticsOverlay = lazy(() => 
+const OpikAnalyticsOverlay = lazy(() =>
   import("@/features/analytics/components/opik-analytics-overlay").then(m => ({
     default: m.OpikAnalyticsOverlay
   }))
@@ -74,7 +74,7 @@ export function ProjectIdView({ projectId }: ProjectIdViewProps) {
             {!isAnalyticsSidebarCollapsed && (
               <Allotment.Pane minSize={MIN_SIDEBAR_WIDTH}>
                 <Suspense fallback={<div className="p-4">Loading analytics...</div>}>
-                  <LightweightAnalyticsSidebar 
+                  <LightweightAnalyticsSidebar
                     isCollapsed={isAnalyticsSidebarCollapsed}
                     onToggleCollapse={() => setIsAnalyticsSidebarCollapsed(!isAnalyticsSidebarCollapsed)}
                   />
@@ -89,7 +89,7 @@ export function ProjectIdView({ projectId }: ProjectIdViewProps) {
         return (
           <div className="h-full overflow-auto bg-background">
             <Suspense fallback={<div className="p-8">Loading analytics dashboard...</div>}>
-              <LazyAnalyticsDashboard />
+              <LazyAnalyticsDashboard projectId={projectId} />
             </Suspense>
           </div>
         );
@@ -175,9 +175,10 @@ export function ProjectIdView({ projectId }: ProjectIdViewProps) {
       {/* Analytics Overlay */}
       {isAnalyticsOverlayOpen && (
         <Suspense fallback={null}>
-          <OpikAnalyticsOverlay 
+          <OpikAnalyticsOverlay
             isOpen={isAnalyticsOverlayOpen}
             onClose={() => setIsAnalyticsOverlayOpen(false)}
+            projectId={projectId}
           />
         </Suspense>
       )}

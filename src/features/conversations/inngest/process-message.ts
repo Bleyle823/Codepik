@@ -1,12 +1,13 @@
 import { createAgent, openai, createNetwork } from '@inngest/agent-kit';
+import { chatTracer } from '@/features/ai/services/opik-ai-tracer';
 
 import { inngest } from "@/inngest/client";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { NonRetriableError } from "inngest";
 import { convex } from "@/lib/convex-client";
 import { api } from "../../../../convex/_generated/api";
-import { 
-  CODING_AGENT_SYSTEM_PROMPT, 
+import {
+  CODING_AGENT_SYSTEM_PROMPT,
   TITLE_GENERATOR_SYSTEM_PROMPT
 } from "./constants";
 import { DEFAULT_CONVERSATION_TITLE } from "../constants";
@@ -26,6 +27,8 @@ interface MessageEvent {
   projectId: Id<"projects">;
   message: string;
 };
+
+console.log("OPENROUTER_API_KEY loaded:", process.env.OPENROUTER_API_KEY ? "Yes (" + process.env.OPENROUTER_API_KEY.slice(0, 5) + "...)" : "No");
 
 export const processMessage = inngest.createFunction(
   {
@@ -57,21 +60,19 @@ export const processMessage = inngest.createFunction(
     event: "message/sent",
   },
   async ({ event, step }) => {
-    const { 
-      messageId, 
+    const {
+      messageId,
       conversationId,
       projectId,
       message
     } = event.data as MessageEvent;
 
-    const internalKey = process.env.POLARIS_CONVEX_INTERNAL_KEY; 
+    const internalKey = process.env.POLARIS_CONVEX_INTERNAL_KEY;
 
     if (!internalKey) {
       throw new NonRetriableError("POLARIS_CONVEX_INTERNAL_KEY is not configured");
     }
 
-    // TODO: Check if this is needed
-    await step.sleep("wait-for-db-sync", "1s");
 
     // Get conversation for title generation check
     const conversation = await step.run("get-conversation", async () => {
@@ -110,121 +111,170 @@ export const processMessage = inngest.createFunction(
       systemPrompt += `\n\n## Previous Conversation (for context only - do NOT repeat these responses):\n${historyText}\n\n## Current Request:\nRespond ONLY to the user's new message below. Do not repeat or reference your previous responses.`;
     }
 
-    // Generate conversation title if it's still the default
-    const shouldGenerateTitle =
-      conversation.title === DEFAULT_CONVERSATION_TITLE;
+    // Start Opik Trace
+    const traceId = await chatTracer.startChatTrace({
+      conversationId,
+      model: "google/gemini-2.0-flash-001",
+      messages: recentMessages,
+      systemPrompt: systemPrompt
+    });
 
-    if (shouldGenerateTitle) {
-       const titleAgent = createAgent({
-        name: "title-generator",
-        system: TITLE_GENERATOR_SYSTEM_PROMPT,
+    try {
+      // Generate conversation title if it's still the default
+      const shouldGenerateTitle =
+        conversation.title === DEFAULT_CONVERSATION_TITLE;
+
+      if (shouldGenerateTitle) {
+        const titleAgent = createAgent({
+          name: "title-generator",
+          system: TITLE_GENERATOR_SYSTEM_PROMPT,
+          model: openai({
+            model: "google/gemini-2.0-flash-001",
+            defaultParameters: { temperature: 0, max_tokens: 50 },
+            apiKey: process.env.OPENROUTER_API_KEY,
+            baseURL: "https://openrouter.ai/api/v1",
+          }),
+        });
+
+        const { output } = await titleAgent.run(message, { step });
+
+        const textMessage = output.find(
+          (m) => m.type === "text" && m.role === "assistant"
+        );
+
+        if (textMessage?.type === "text") {
+          const title =
+            typeof textMessage.content === "string"
+              ? textMessage.content.trim()
+              : textMessage.content
+                .map((c) => c.text)
+                .join("")
+                .trim();
+
+          if (title) {
+            await step.run("update-conversation-title", async () => {
+              await convex.mutation(api.system.updateConversationTitle, {
+                internalKey,
+                conversationId,
+                title,
+              });
+            });
+          }
+        }
+      }
+
+      // Create the coding agent with file tools
+      const codingAgent = createAgent({
+        name: "codepik",
+        description: "An expert AI coding assistant",
+        system: systemPrompt,
         model: openai({
-          model: "gpt-4o-mini",
-          defaultParameters: { temperature: 0, max_tokens: 50 },
+          model: "google/gemini-2.0-flash-001",
+          defaultParameters: { temperature: 0.3, max_tokens: 16000 },
+          apiKey: process.env.OPENROUTER_API_KEY,
+          baseURL: "https://openrouter.ai/api/v1",
         }),
-       });
+        tools: [
+          createListFilesTool({ internalKey, projectId }),
+          createReadFilesTool({ internalKey }),
+          createUpdateFileTool({ internalKey }),
+          createEnhancedUpdateFileTool({ internalKey }), // Enhanced version with metadata
+          createCreateFilesTool({ projectId, internalKey }),
+          createCreateFolderTool({ projectId, internalKey }),
+          createRenameFileTool({ internalKey }),
+          createDeleteFilesTool({ internalKey }),
+          createScrapeUrlsTool(),
+        ],
+      });
 
-       const { output } = await titleAgent.run(message, { step });
+      // Create network with single agent
+      const network = createNetwork({
+        name: "codepik-network",
+        agents: [codingAgent],
+        maxIter: 20,
+        router: ({ network }) => {
+          const lastResult = network.state.results.at(-1);
+          const hasTextResponse = lastResult?.output.some(
+            (m) => m.type === "text" && m.role === "assistant"
+          );
+          const hasToolCalls = lastResult?.output.some(
+            (m) => m.type === "tool_call"
+          );
 
-       const textMessage = output.find(
+          // Anthropic outputs text AND tool calls together
+          // Only stop if there's textual response WITHOUT tool calls (final response)
+          if (hasTextResponse && !hasToolCalls) {
+            return undefined;
+          }
+          return codingAgent;
+        }
+      });
+
+      // Run the agent
+      const result = await network.run(message);
+
+      // Extract the assistant's text response from the last agent result
+      const lastResult = result.state.results.at(-1);
+      const textMessage = lastResult?.output.find(
         (m) => m.type === "text" && m.role === "assistant"
       );
 
+      let assistantResponse =
+        "I processed your request. Let me know if you need anything else!";
+
       if (textMessage?.type === "text") {
-         const title = 
+        assistantResponse =
           typeof textMessage.content === "string"
-            ? textMessage.content.trim()
-            : textMessage.content
-              .map((c) => c.text)
-              .join("")
-              .trim();
-
-        if (title) {
-          await step.run("update-conversation-title", async () => {
-            await convex.mutation(api.system.updateConversationTitle, {
-              internalKey,
-              conversationId,
-              title,
-            });
-          });
-        }
+            ? textMessage.content
+            : textMessage.content.map((c) => c.text).join("");
       }
-    }
 
-    // Create the coding agent with file tools
-    const codingAgent = createAgent({
-      name: "polaris",
-      description: "An expert AI coding assistant",
-      system: systemPrompt,
-       model: openai({
-        model: "gpt-4o",
-        defaultParameters: { temperature: 0.3, max_tokens: 16000 }
-       }),
-       tools: [
-        createListFilesTool({ internalKey, projectId }),
-        createReadFilesTool({ internalKey }),
-        createUpdateFileTool({ internalKey }),
-        createEnhancedUpdateFileTool({ internalKey }), // Enhanced version with metadata
-        createCreateFilesTool({ projectId, internalKey }),
-        createCreateFolderTool({ projectId, internalKey }),
-        createRenameFileTool({ internalKey }),
-        createDeleteFilesTool({ internalKey }),
-        createScrapeUrlsTool(),
-       ],
-    });
+      // Add user message to trace
+      if (traceId) {
+        await chatTracer.addChatMessage(traceId, {
+          role: 'user',
+          content: message
+        });
 
-    // Create network with single agent
-    const network = createNetwork({
-      name: "polaris-network",
-      agents: [codingAgent],
-      maxIter: 20,
-      router: ({ network }) => {
-        const lastResult = network.state.results.at(-1);
-        const hasTextResponse = lastResult?.output.some(
-          (m) => m.type === "text" && m.role === "assistant"
-        );
-        const hasToolCalls = lastResult?.output.some(
-          (m) => m.type === "tool_call"
-        );
+        await chatTracer.addChatMessage(traceId, {
+          role: 'assistant',
+          content: assistantResponse,
+          // Estimate token count roughly (TODO: use real usage from LLM provider if available)
+          tokenCount: assistantResponse.length / 4
+        });
 
-        // Anthropic outputs text AND tool calls together
-        // Only stop if there's text WITHOUT tool calls (final response)
-        if (hasTextResponse && !hasToolCalls) {
-          return undefined;
-        }
-        return codingAgent;
+        // Record tools usage if any (simplified)
+        // Ideally iterate over steps and record tool spans
       }
-    });
 
-    // Run the agent
-    const result = await network.run(message);
-
-    // Extract the assistant's text response from the last agent result
-    const lastResult = result.state.results.at(-1);
-    const textMessage = lastResult?.output.find(
-      (m) => m.type === "text" && m.role === "assistant"
-    );
-
-    let assistantResponse =
-      "I processed your request. Let me know if you need anything else!";
-
-    if (textMessage?.type === "text") {
-      assistantResponse =
-        typeof textMessage.content === "string"
-          ? textMessage.content
-          : textMessage.content.map((c) => c.text).join("");
-    }
-
-    // Update the assistant message with the response (this also sets status to completed)
-    await step.run("update-assistant-message", async () => {
+      // Update assistant message with response
       await convex.mutation(api.system.updateMessageContent, {
-        internalKey,
-        messageId,
+        internalKey: process.env.POLARIS_CONVEX_INTERNAL_KEY!,
+        messageId: messageId, // Assuming messageId is the correct ID for the assistant's message
         content: assistantResponse,
-      })
-    });
+        traceId: traceId || undefined,
+      });
 
-    return { success: true, messageId, conversationId };
+      // End successful trace
+      if (traceId) {
+        await chatTracer.endTrace(traceId, {
+          success: true,
+          output: assistantResponse,
+          // Add cost/token usage here if available from result
+        });
+      }
+
+      return { success: true, messageId, conversationId };
+    } catch (error) {
+      // End failed trace
+      if (traceId) {
+        await chatTracer.endTrace(traceId, {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+      throw error;
+    }
   }
 );
 

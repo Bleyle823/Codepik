@@ -17,13 +17,13 @@ import { InteractiveTerminal } from "./interactive-terminal";
 import { OpikStatus } from "./opik-status";
 import { editorOpikIntegration } from "../services/editor-opik-integration";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { 
-  AlertTriangleIcon, 
-  TerminalSquareIcon, 
+import {
+  AlertTriangleIcon,
+  TerminalSquareIcon,
   BarChart3Icon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { 
+import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 
@@ -36,13 +36,13 @@ export const EditorView = ({ projectId }: { projectId: Id<"projects"> }) => {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [showTerminal, setShowTerminal] = useState(false);
   const [showOpikAnalytics, setShowOpikAnalytics] = useState(false);
-  
+
   const project = useProject(projectId);
-  const { 
-    terminalOutput, 
-    currentDirectory, 
-    sendInput, 
-    isInteractive 
+  const {
+    terminalOutput,
+    currentDirectory,
+    sendInput,
+    isInteractive
   } = useInteractiveWebContainer({
     projectId,
     enabled: true,
@@ -126,7 +126,7 @@ export const EditorView = ({ projectId }: { projectId: Id<"projects"> }) => {
               onToggleAnalytics={() => setShowOpikAnalytics((value) => !value)}
               showAnalytics={showOpikAnalytics}
             />
-            
+
             <Button
               size="sm"
               variant="ghost"
@@ -156,7 +156,7 @@ export const EditorView = ({ projectId }: { projectId: Id<"projects"> }) => {
                         <div className="size-full flex items-center justify-center">
                           <Image
                             src="/logo-alt.svg"
-                            alt="Polaris"
+                            alt="Codepik"
                             width={50}
                             height={50}
                             className="opacity-25"
@@ -192,8 +192,8 @@ export const EditorView = ({ projectId }: { projectId: Id<"projects"> }) => {
                       )}
                     </Allotment.Pane>
                     <Allotment.Pane minSize={100} maxSize={500} preferredSize={200}>
-                      <InteractiveTerminal 
-                        output={terminalOutput} 
+                      <InteractiveTerminal
+                        output={terminalOutput}
                         currentDirectory={currentDirectory}
                         onInput={sendInput}
                         isInteractive={isInteractive}
@@ -206,7 +206,7 @@ export const EditorView = ({ projectId }: { projectId: Id<"projects"> }) => {
                       <div className="size-full flex items-center justify-center">
                         <Image
                           src="/logo-alt.svg"
-                          alt="Polaris"
+                          alt="Codepik"
                           width={50}
                           height={50}
                           className="opacity-25"
@@ -251,7 +251,7 @@ export const EditorView = ({ projectId }: { projectId: Id<"projects"> }) => {
                   <div className="size-full flex items-center justify-center">
                     <Image
                       src="/logo-alt.svg"
-                      alt="Polaris"
+                      alt="Codepik"
                       width={50}
                       height={50}
                       className="opacity-25"
@@ -287,8 +287,8 @@ export const EditorView = ({ projectId }: { projectId: Id<"projects"> }) => {
                 )}
               </Allotment.Pane>
               <Allotment.Pane minSize={100} maxSize={500} preferredSize={200}>
-                <InteractiveTerminal 
-                  output={terminalOutput} 
+                <InteractiveTerminal
+                  output={terminalOutput}
                   currentDirectory={currentDirectory}
                   onInput={sendInput}
                   isInteractive={isInteractive}
@@ -301,7 +301,7 @@ export const EditorView = ({ projectId }: { projectId: Id<"projects"> }) => {
                 <div className="size-full flex items-center justify-center">
                   <Image
                     src="/logo-alt.svg"
-                    alt="Polaris"
+                    alt="Codepik"
                     width={50}
                     height={50}
                     className="opacity-25"

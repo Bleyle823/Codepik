@@ -63,7 +63,7 @@ export const NewProjectDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent 
+      <DialogContent
         showCloseButton={false}
         className="sm:max-w-lg p-0"
       >
@@ -76,15 +76,15 @@ export const NewProjectDialog = ({
         <PromptInput onSubmit={handleSubmit} className="border-none!">
           <PromptInputBody>
             <PromptInputTextarea
-              placeholder="Ask Polaris to build..."
+              placeholder="Ask Codepik to build..."
               onChange={(e) => setInput(e.target.value)}
               value={input}
               disabled={isSubmitting}
             />
           </PromptInputBody>
           <PromptInputFooter>
-             <PromptInputTools />
-             <PromptInputSubmit disabled={!input || isSubmitting} />
+            <PromptInputTools />
+            <PromptInputSubmit disabled={!input || isSubmitting} />
           </PromptInputFooter>
         </PromptInput>
       </DialogContent>
