@@ -23,10 +23,20 @@ export default defineSchema({
     content: v.optional(v.string()),
     path: v.string(),
     storageId: v.optional(v.id("_storage")), // For binary files
+    updatedAt: v.optional(v.number()),
+    // AI Edit Metadata for real-time synchronization
+    lastEditMetadata: v.optional(v.object({
+      type: v.union(v.literal("ai-edit"), v.literal("ai-create"), v.literal("ai-refactor"), v.literal("ai-fix")),
+      summary: v.string(),
+      changedLines: v.optional(v.array(v.number())),
+      timestamp: v.number(),
+      editId: v.string(),
+    })),
   })
     .index("by_project", ["projectId"])
     .index("by_parent", ["parentId"])
-    .index("by_project_parent", ["projectId", "parentId"]),
+    .index("by_project_parent", ["projectId", "parentId"])
+    .index("by_updated_at", ["updatedAt"]),
 
   conversations: defineTable({
     projectId: v.id("projects"),
@@ -41,8 +51,20 @@ export default defineSchema({
     role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
     content: v.string(),
     status: v.optional(v.union(v.literal("pending"), v.literal("processing"), v.literal("completed"), v.literal("failed"), v.literal("cancelled"))),
+    traceId: v.optional(v.string()),
     updatedAt: v.number(),
   })
     .index("by_conversation", ["conversationId"])
     .index("by_project_status", ["projectId", "status"]),
+
+  uploads: defineTable({
+    projectId: v.id("projects"),
+    status: v.union(v.literal("pending"), v.literal("processing"), v.literal("completed"), v.literal("failed")),
+    progress: v.number(),
+    message: v.optional(v.string()),
+    totalFiles: v.optional(v.number()),
+    processedFiles: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_project", ["projectId"]),
 });

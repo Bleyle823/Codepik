@@ -9,9 +9,9 @@ import {
   RefreshCwIcon,
 } from "lucide-react";
 
-import { useWebContainer } from "@/features/preview/hooks/use-webcontainer";
+import { useInteractiveWebContainer } from "@/features/preview/hooks/use-interactive-webcontainer";
 import { PreviewSettingsPopover } from "@/features/preview/components/preview-settings-popover";
-import { PreviewTerminal } from "@/features/preview/components/preview-terminal";
+import { InteractivePreviewTerminal } from "@/features/preview/components/interactive-preview-terminal";
 
 import { Button } from "@/components/ui/button";
 
@@ -24,8 +24,8 @@ export const PreviewView = ({ projectId }: { projectId: Id<"projects"> }) => {
   const [showTerminal, setShowTerminal] = useState(true);
 
   const {
-    status, previewUrl, error, restart, terminalOutput
-  } = useWebContainer({
+    status, previewUrl, error, restart, terminalOutput, currentDirectory, sendInput, isInteractive
+  } = useInteractiveWebContainer({
     projectId,
     enabled: true,
     settings: project?.settings,
@@ -113,9 +113,18 @@ export const PreviewView = ({ projectId }: { projectId: Id<"projects"> }) => {
               <div className="h-full flex flex-col bg-background border-t">
                 <div className="h-7 flex items-center px-3 text-xs gap-1.5 text-muted-foreground border-b border-border/50 shrink-0">
                   <TerminalSquareIcon className="size-3" />
-                  Terminal
+                  <span>Terminal</span>
+                  {isInteractive && (
+                    <span className="ml-auto text-green-500">● Interactive</span>
+                  )}
+                  <span className="text-blue-400">{currentDirectory}</span>
                 </div>
-                <PreviewTerminal output={terminalOutput} />
+                <InteractivePreviewTerminal 
+                  output={terminalOutput} 
+                  currentDirectory={currentDirectory}
+                  onInput={sendInput}
+                  isInteractive={isInteractive}
+                />
               </div>
             </Allotment.Pane>
           )}

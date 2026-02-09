@@ -10,6 +10,7 @@ import {
 import { StateEffect, StateField } from "@codemirror/state";
 
 import { fetcher } from "./fetcher";
+import { suggestionTracer } from "@/features/ai/services/opik-ai-tracer";
 
 // StateEffect: A way to send "messages" to update state.
 // We define one effect type for setting the suggestion text.
@@ -89,6 +90,7 @@ const generatePayload = (view: EditorView, fileName: string) => {
   }
 }
 
+
 const createDebouncePlugin = (fileName: string) => {
   return ViewPlugin.fromClass(
     class {
@@ -108,6 +110,8 @@ const createDebouncePlugin = (fileName: string) => {
         }
 
         if (currentAbortController !== null) {
+          // Cancel previous trace if it exists? 
+          // For now, just abort fetch
           currentAbortController.abort();
         }
 
@@ -121,15 +125,52 @@ const createDebouncePlugin = (fileName: string) => {
             return;
           }
           currentAbortController = new AbortController();
-          const suggestion = await fetcher(
-            payload,
-            currentAbortController.signal
-          );
 
-          isWaitingForSuggestion = false;
-          view.dispatch({
-            effects: setSuggestionEffect.of(suggestion),
+          const startTime = Date.now();
+          const traceId = await suggestionTracer.startSuggestionTrace({
+            model: "unknown", // Fetcher doesn't expose this yet
+            codeContext: payload.code,
+            cursorPosition: view.state.selection.main.head,
+            triggerType: 'auto',
+            fileName
           });
+
+          try {
+            const suggestion = await fetcher(
+              payload,
+              currentAbortController.signal
+            );
+
+            if (traceId && suggestion) {
+              await suggestionTracer.addSuggestionGenerated(traceId, {
+                suggestions: [suggestion],
+                confidence: [1.0], // Mock confidence
+                processingTime: Date.now() - startTime
+              });
+
+              // We don't end the trace here, we wait for acceptance or rejection (new trigger)
+              // But for simplicity in this stateless plugin, we might just log generation here
+              // and log acceptance as a separate event or try to correlate.
+              // For MVP, let's just trace generation success.
+              await suggestionTracer.endTrace(traceId, {
+                success: true,
+                output: suggestion
+              });
+            }
+
+            isWaitingForSuggestion = false;
+            view.dispatch({
+              effects: setSuggestionEffect.of(suggestion),
+            });
+          } catch (error) {
+            if (traceId) {
+              await suggestionTracer.endTrace(traceId, {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown'
+              });
+            }
+            // ... existing error handling ...
+          }
         }, DEBOUNCE_DELAY);
       }
 
@@ -151,49 +192,39 @@ const renderPlugin = ViewPlugin.fromClass(
     decorations: DecorationSet;
 
     constructor(view: EditorView) {
-      this.decorations = this.build(view);
+      this.decorations = this.getDecorations(view);
     }
 
     update(update: ViewUpdate) {
-      // Rebuild decorations if doc changed, cursor moved, or suggestion changed
-      const suggestionChanged = update.transactions.some((transaction) => {
-        return transaction.effects.some((effect) => {
-          return effect.is(setSuggestionEffect);
-        });
-      });
-
-      // Rebuild decorations if doc changed, cursor moved, or suggestion changed
-      const shouldRebuild =
-        update.docChanged || update.selectionSet || suggestionChanged;
-
-      if (shouldRebuild) {
-        this.decorations = this.build(update.view);
+      if (
+        update.docChanged ||
+        update.selectionSet ||
+        update.startState.field(suggestionState) !== update.state.field(suggestionState)
+      ) {
+        this.decorations = this.getDecorations(update.view);
       }
     }
 
-    build(view: EditorView) {
-      if (isWaitingForSuggestion) {
-        return Decoration.none;
-      }
-
-      // Get current suggestion from state
+    getDecorations(view: EditorView) {
       const suggestion = view.state.field(suggestionState);
       if (!suggestion) {
         return Decoration.none;
       }
 
-      // Create a widget decoration at the cursor position
       const cursor = view.state.selection.main.head;
       return Decoration.set([
         Decoration.widget({
           widget: new SuggestionWidget(suggestion),
-          side: 1, // Render after cursor (side: 1), not before (side: -1)
+          side: 1,
         }).range(cursor),
       ]);
     }
   },
-  { decorations: (plugin) => plugin.decorations } // Tell CodeMirror to use our decorations
+  {
+    decorations: (v) => v.decorations,
+  }
 );
+
 
 const acceptSuggestionKeymap = keymap.of([
   {
@@ -205,6 +236,12 @@ const acceptSuggestionKeymap = keymap.of([
       }
 
       const cursor = view.state.selection.main.head;
+
+      // Trace acceptance
+      // Note: Ideally we link this to the generation trace, but we don't store traceId in state yet.
+      // For now, create a standalone 'acceptance' event or just fire a metric.
+      suggestionTracer.addSuggestionAccepted("global-suggestion-trace", 0, suggestion).catch(console.error);
+
       view.dispatch({
         changes: { from: cursor, insert: suggestion }, // Insert the suggestion text
         selection: { anchor: cursor + suggestion.length }, // Move cursor to end

@@ -22,7 +22,7 @@ export const PreviewTerminal = ({ output }: PreviewTerminalProps) => {
 
     const terminal = new Terminal({
       convertEol: true,
-      disableStdin: true,
+      disableStdin: false, // Enable stdin for keyboard interaction
       fontSize: 12,
       fontFamily: "monospace",
       theme: { background: "#1f2228" },
@@ -34,6 +34,22 @@ export const PreviewTerminal = ({ output }: PreviewTerminalProps) => {
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
+
+    // Add keyboard handler for clearing terminal
+    terminal.onKey(({ key, domEvent }) => {
+      // Clear terminal on Backspace key
+      if (domEvent.key === 'Backspace') {
+        terminal.clear();
+        lastLengthRef.current = 0;
+        domEvent.preventDefault();
+      }
+      // Clear terminal on Ctrl+L (common terminal clear shortcut)
+      else if (domEvent.ctrlKey && domEvent.key === 'l') {
+        terminal.clear();
+        lastLengthRef.current = 0;
+        domEvent.preventDefault();
+      }
+    });
 
     // Write existing output on mount
     if (output) {

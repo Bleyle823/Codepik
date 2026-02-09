@@ -33,7 +33,7 @@ export const getFile = query({
 
     const file = await ctx.db.get("files", args.id);
 
-     if (!file) {
+    if (!file) {
       throw new Error("File not found");
     }
 
@@ -84,7 +84,7 @@ export const getFilePath = query({
     let currentId: Id<"files"> | undefined = args.id;
 
     while (currentId) {
-      const file = (await ctx.db.get("files", currentId)) as 
+      const file = (await ctx.db.get("files", currentId)) as
         | Doc<"files">
         | undefined;
       if (!file) break;
@@ -98,7 +98,7 @@ export const getFilePath = query({
 });
 
 export const getFolderContents = query({
-  args: { 
+  args: {
     projectId: v.id("projects"),
     parentId: v.optional(v.id("files")),
   },
@@ -127,8 +127,8 @@ export const getFolderContents = query({
     // Sort: folders first, then files, alphabetically within each group
     return files.sort((a, b) => {
       // Folders come before files
-      if (a.type === "folder" && b.type === "file") return -1;
-      if (a.type === "file" && b.type === "folder") return 1;
+      if (a.type === "directory" && b.type === "file") return -1;
+      if (a.type === "file" && b.type === "directory") return 1;
 
       // Within same type, sort alphabetically by name
       return a.name.localeCompare(b.name);
@@ -137,7 +137,7 @@ export const getFolderContents = query({
 });
 
 export const createFile = mutation({
-  args: { 
+  args: {
     projectId: v.id("projects"),
     parentId: v.optional(v.id("files")),
     name: v.string(),
@@ -174,6 +174,15 @@ export const createFile = mutation({
 
     const now = Date.now();
 
+    // Calculate path
+    let path = args.name;
+    if (args.parentId) {
+      const parent = await ctx.db.get(args.parentId);
+      if (parent) {
+        path = `${parent.path}/${args.name}`;
+      }
+    }
+
     await ctx.db.insert("files", {
       projectId: args.projectId,
       name: args.name,
@@ -181,16 +190,17 @@ export const createFile = mutation({
       type: "file",
       parentId: args.parentId,
       updatedAt: now,
+      path,
     });
 
-    await ctx.db.patch("projects", args.projectId, {
+    await ctx.db.patch(args.projectId, {
       updatedAt: now,
     });
   },
 });
 
 export const createFolder = mutation({
-  args: { 
+  args: {
     projectId: v.id("projects"),
     parentId: v.optional(v.id("files")),
     name: v.string(),
@@ -198,7 +208,7 @@ export const createFolder = mutation({
   handler: async (ctx, args) => {
     const identity = await verifyAuth(ctx);
 
-    const project = await ctx.db.get("projects", args.projectId);
+    const project = await ctx.db.get(args.projectId);
 
     if (!project) {
       throw new Error("Project not found");
@@ -219,22 +229,32 @@ export const createFolder = mutation({
       .collect();
 
     const existing = files.find(
-      (file) => file.name === args.name && file.type === "folder"
+      (file) => file.name === args.name && file.type === "directory"
     );
 
     if (existing) throw new Error("Folder already exists");
 
     const now = Date.now();
 
+    // Calculate path
+    let path = args.name;
+    if (args.parentId) {
+      const parent = await ctx.db.get(args.parentId);
+      if (parent) {
+        path = `${parent.path}/${args.name}`;
+      }
+    }
+
     await ctx.db.insert("files", {
       projectId: args.projectId,
       name: args.name,
-      type: "folder",
+      type: "directory",
       parentId: args.parentId,
       updatedAt: now,
+      path,
     });
 
-    await ctx.db.patch("projects", args.projectId, {
+    await ctx.db.patch(args.projectId, {
       updatedAt: now,
     });
   },
@@ -296,7 +316,7 @@ export const renameFile = mutation({
     await ctx.db.patch("projects", file.projectId, {
       updatedAt: now,
     });
-  }
+  },
 });
 
 export const deleteFile = mutation({
@@ -329,8 +349,8 @@ export const deleteFile = mutation({
       }
 
       // If it's a folder, delete all children first
-       if (item.type === "folder") {
-         const children = await ctx.db
+      if (item.type === "directory") {
+        const children = await ctx.db
           .query("files")
           .withIndex("by_project_parent", (q) =>
             q
@@ -339,13 +359,13 @@ export const deleteFile = mutation({
           )
           .collect();
 
-          for (const child of children) {
-            await deleteRecursive(child._id);
-          }
-       }
+        for (const child of children) {
+          await deleteRecursive(child._id);
+        }
+      }
 
-       // Delete storage file if it exists
-       if (item.storageId) {
+      // Delete storage file if it exists
+      if (item.storageId) {
         await ctx.storage.delete(item.storageId);
       }
 
@@ -358,7 +378,7 @@ export const deleteFile = mutation({
     await ctx.db.patch("projects", file.projectId, {
       updatedAt: Date.now(),
     });
-  }
+  },
 });
 
 export const updateFile = mutation({

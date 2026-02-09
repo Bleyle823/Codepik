@@ -69,14 +69,21 @@ export const updateMessageContent = mutation({
     internalKey: v.string(),
     messageId: v.id("messages"),
     content: v.string(),
+    traceId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     validateInternalKey(args.internalKey);
 
-    await ctx.db.patch(args.messageId, {
+    const patchData: any = {
       content: args.content,
       status: "completed" as const,
-    });
+    };
+
+    if (args.traceId) {
+      patchData.traceId = args.traceId;
+    }
+
+    await ctx.db.patch(args.messageId, patchData);
   },
 });
 
@@ -150,14 +157,14 @@ export const updateConversationTitle = mutation({
     conversationId: v.id("conversations"),
     title: v.string(),
   },
-   handler: async (ctx, args) => {
+  handler: async (ctx, args) => {
     validateInternalKey(args.internalKey);
 
     await ctx.db.patch(args.conversationId, {
       title: args.title,
       updatedAt: Date.now(),
     });
-   },
+  },
 });
 
 // Used for Agent "ListFiles" tool
@@ -208,6 +215,39 @@ export const updateFile = mutation({
     await ctx.db.patch(args.fileId, {
       content: args.content,
       updatedAt: Date.now(),
+    });
+
+    return args.fileId;
+  },
+});
+
+// Enhanced version with edit metadata for real-time synchronization
+export const updateFileWithMetadata = mutation({
+  args: {
+    internalKey: v.string(),
+    fileId: v.id("files"),
+    content: v.string(),
+    editMetadata: v.object({
+      type: v.union(v.literal("ai-edit"), v.literal("ai-create"), v.literal("ai-refactor"), v.literal("ai-fix")),
+      summary: v.string(),
+      changedLines: v.optional(v.array(v.number())),
+      timestamp: v.number(),
+      editId: v.string(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    validateInternalKey(args.internalKey);
+
+    const file = await ctx.db.get(args.fileId);
+
+    if (!file) {
+      throw new Error("File not found");
+    }
+
+    await ctx.db.patch(args.fileId, {
+      content: args.content,
+      updatedAt: Date.now(),
+      lastEditMetadata: args.editMetadata,
     });
 
     return args.fileId;
@@ -286,6 +326,14 @@ export const createFiles = mutation({
       )
       .collect();
 
+    let parentPath = "";
+    if (args.parentId) {
+      const parent = await ctx.db.get(args.parentId);
+      if (parent) {
+        parentPath = parent.path;
+      }
+    }
+
     const results: { name: string; fileId: string; error?: string }[] = [];
 
     for (const file of args.files) {
@@ -302,12 +350,15 @@ export const createFiles = mutation({
         continue;
       }
 
+      const path = parentPath ? `${parentPath}/${file.name}` : file.name;
+
       const fileId = await ctx.db.insert("files", {
         projectId: args.projectId,
         name: file.name,
         content: file.content,
         type: "file",
         parentId: args.parentId,
+        path: path,
         updatedAt: Date.now(),
       });
 
@@ -417,7 +468,7 @@ export const deleteFile = mutation({
   handler: async (ctx, args) => {
     validateInternalKey(args.internalKey);
 
-     const file = await ctx.db.get(args.fileId);
+    const file = await ctx.db.get(args.fileId);
     if (!file) {
       throw new Error("File not found");
     }
@@ -431,7 +482,7 @@ export const deleteFile = mutation({
       }
 
       // If it's a folder, delete all children first
-      if (item.type === "folder") {
+      if (item.type === "directory") {
         const children = await ctx.db
           .query("files")
           .withIndex("by_project_parent", (q) =>
@@ -537,8 +588,9 @@ export const createBinaryFile = mutation({
       path: path,
       storageId: args.storageId,
       parentId: args.parentId,
+      updatedAt: Date.now(),
     });
-    
+
     return fileId;
   },
 });
@@ -558,37 +610,61 @@ export const updateImportStatus = mutation({
   handler: async (ctx, args) => {
     validateInternalKey(args.internalKey);
 
-    await ctx.db.patch("projects", args.projectId, {
+    await ctx.db.patch(args.projectId, {
       importStatus: args.status,
       updatedAt: Date.now(),
     });
   },
 });
 
-export const updateExportStatus = mutation({
+export const createUpload = mutation({
   args: {
     internalKey: v.string(),
     projectId: v.id("projects"),
-    status: v.optional(
-      v.union(
-        v.literal("exporting"),
-        v.literal("completed"),
-        v.literal("failed"),
-        v.literal("cancelled")
-      )
-    ),
-    repoUrl: v.optional(v.string()),
+    totalFiles: v.number(),
   },
   handler: async (ctx, args) => {
     validateInternalKey(args.internalKey);
 
-    await ctx.db.patch("projects", args.projectId, {
-      exportStatus: args.status,
-      exportRepoUrl: args.repoUrl,
+    const uploadId = await ctx.db.insert("uploads", {
+      projectId: args.projectId,
+      status: "pending",
+      progress: 0,
+      totalFiles: args.totalFiles,
+      processedFiles: 0,
       updatedAt: Date.now(),
     });
+
+    return uploadId;
   },
 });
+
+export const updateUploadStatus = mutation({
+  args: {
+    internalKey: v.string(),
+    projectId: v.id("projects"),
+    uploadId: v.id("uploads"),
+    status: v.union(v.literal("pending"), v.literal("processing"), v.literal("completed"), v.literal("failed")),
+    progress: v.number(),
+    message: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    validateInternalKey(args.internalKey);
+
+    await ctx.db.patch(args.uploadId, {
+      status: args.status,
+      progress: args.progress,
+      message: args.message,
+      updatedAt: Date.now(),
+    });
+
+    // If completed or failed, we might want to update the project status too?
+    // For now, let's keep it separate as per existing logic which used to update project importStatus
+    // But since this is general upload, we'll leave project status management to the caller if needed.
+  },
+});
+
+
 
 export const getProjectFilesWithUrls = query({
   args: {
